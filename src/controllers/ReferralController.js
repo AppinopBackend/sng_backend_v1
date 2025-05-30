@@ -6,15 +6,10 @@ module.exports = {
     directReferred: async (req, res) => {
         try {
             const { id, index } = req.query;
-            
-            const members = await Referral.find({ sponser_id: id });
-            console.log(members, ": Members");
-            
+            const members = await Referral.find({ sponser_id: id });            
             const userIds = members.map(member => member.user_id);
             const userCodes = members.map(member => member.user_code);
-
             const users = await Users.find({ _id: { $in: userIds } }, { password: 0, ranks: 0 }).lean();
-
             const stacking_details = await Staking.find({user_id : {$in: userCodes}});
 
             // Create a map to hold the running staking package count for each user

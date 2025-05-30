@@ -31,11 +31,13 @@ process.on('message', async(message) => {
                 // Fetch all staking first
                 let staking = await Staking.find({status: 'RUNNING'});
                 
-
+                
                 const bulkStak = [];
                 const bulkTransactions = [];
                 const bulkWallet = [];
                 for (const stake of staking) {
+                    console.log(stake, "Log of Single Stake");
+                    
                     let totalpaid = (stake.paid + stake.amount);
                     console.log(totalpaid, " : Total Paid Value");
                     if (totalpaid < stake.total) {
@@ -57,18 +59,18 @@ process.on('message', async(message) => {
                             amount: interest,
                             staking_id: stake._id,
                             currency: stake.currency,
-                            transaction_type: 'CARNIVAL SUPER BONUS',
+                            transaction_type: 'SNG SUPER BONUS',
                             status: "COMPLETE"
                         })
 
                         bulkWallet.push({
                             updateOne: {
                                 filter: { user_id: stake.user_id },
-                                update: { $inc: { balance: interest } }
+                                update: { $inc: { usdt_balance: interest } }
                             }
                         })
 
-                        //CARNIVAL LEVEL BONUS
+                        //SNG LEVEL BONUS
                         // find upline for this single user to distribute level bonus
                         let upline = await ReferralController.getUplineTeam(stake.id)
                         console.log(upline, `UPLINE TEAM OF USER ID ${stake.id}`)
@@ -76,19 +78,21 @@ process.on('message', async(message) => {
                             for await (const up of upline) {
                                 let level_bonus;
                                 if (up.level == 1) {
-                                    level_bonus = interest * 15 / 100;
-                                } else if (up.level == 2) {
                                     level_bonus = interest * 10 / 100;
+                                } else if (up.level == 2) {
+                                    level_bonus = interest * 8 / 100;
                                 } else if (up.level == 3) {
                                     level_bonus = interest * 5 / 100;
                                 } else if (up.level == 4) {
                                     level_bonus = interest * 4 / 100;
-                                } else if (up.level == 5 || up.level == 6 || up.level == 7 || up.level == 8 || up.level == 9 || up.level == 10) {
+                                } else if (up.level == 5 || up.level == 6 || up.level == 7) {
                                     level_bonus = interest * 3 / 100;
-                                } else if (up.level == 11 || up.level == 12 || up.level == 13 || up.level == 14 || up.level == 15 || up.level == 16 || up.level == 17 || up.level == 18 || up.level == 19 || up.level == 20) {
+                                } else if (up.level == 8 || up.level == 9 || up.level == 10 ) {
                                     level_bonus = interest * 2 / 100;
-                                } else if (up.level == 21 || up.level == 22 || up.level == 23 || up.level == 24 || up.level == 25 || up.level == 26 || up.level == 27 || up.level == 28 || up.level == 29 || up.level == 30) {
+                                } else if (up.level == 11 || up.level == 12 || up.level == 13 ) {
                                     level_bonus = interest * 1 / 100;
+                                } else if (up.level == 11 || up.level == 12 || up.level == 13 ) {
+                                    level_bonus = interest * 0.5 / 100;
                                 } else {
                                     console.log(up.level)
                                 }
@@ -96,7 +100,7 @@ process.on('message', async(message) => {
                                 bulkWallet.push({
                                     updateOne: {
                                         filter: { user_id: up.user_id },
-                                        update: { $inc: { balance: level_bonus } }
+                                        update: { $inc: { usdt_balance: level_bonus } }
                                     }
                                 })
 
@@ -106,7 +110,7 @@ process.on('message', async(message) => {
                                     amount: level_bonus,
                                     staking_id: stake._id,
                                     currency: stake.currency,
-                                    transaction_type: 'CARNIVAL SMART BONUS',
+                                    transaction_type: 'SNG SMART BONUS',
                                     status: "COMPLETE"
                                 })
                             }
@@ -630,12 +634,12 @@ process.on('message', async(message) => {
 
             // Add your task logic here
             await superBonus();
-            await carnivalRoyaltyBonus();
-            await carnivalCorporateToken();
+            // await carnivalRoyaltyBonus();
+            // await carnivalCorporateToken();
         };
 
         // Schedule the cron job
-        cron.schedule('1 0 * * *', () => {
+        cron.schedule('21 17 * * *', () => {
             task();
         }, {
             scheduled: true,
@@ -644,7 +648,7 @@ process.on('message', async(message) => {
 
 
         myEmitter.on('distribute', async() => {
-            // await superBonus();
+            await superBonus();
             // await carnivalRoyaltyBonus();
             // await carnivalCorporateToken();
             // await carnivalRankRewards();

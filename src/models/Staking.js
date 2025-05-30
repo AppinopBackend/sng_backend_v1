@@ -10,7 +10,7 @@ const stakingSchema = mongoose.Schema(
         // cctpaid: { type: Number, required: false, default: 0},
         total: { type: Number, required: false, default: 0},
         chain: { type: String, required: false, default: 'BEP20'},
-        status: { type: String, required: false, default: 'RUNNING'},
+        status: { type: String, required: true, default: 'RUNNING'},
         roi: { type: Number, required: true },
         // phase: { type: String, required: true },
         deduct_amount: { type: Number, required: false, default : 0 },
