@@ -640,7 +640,7 @@ process.on('message', async(message) => {
         };
 
         // Schedule the cron job
-        cron.schedule('56 17 * * *', () => {
+        cron.schedule('1 0 * * *', () => {
             console.log('Starting....');
             
             task();
