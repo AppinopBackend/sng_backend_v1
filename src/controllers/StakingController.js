@@ -12,14 +12,14 @@ module.exports = {
         try {
             const { user_id, id } = req.user;
             const { amount } = req.body;
-
+            
             // check if amount is greater then and equal to 25 or not
             if(amount < 100) return res.status(500).json({success: false, message: "You cannnot buy package below $100", data: []})
 
             // check if user have enough balance in the wallet
             let userbalance = await Wallet.findOne({user_id: user_id});
             console.log(userbalance.usdt_balance, ": User's Usdt Balance...");
-            
+            let user = await Users.findOne({user_id : user_id});
             if(userbalance === null || userbalance.usdt_balance < amount) return res.status(406).json({success: false, message: 'Insufficient Wallet Balance', data: []})
             
 
