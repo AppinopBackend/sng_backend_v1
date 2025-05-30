@@ -11,74 +11,90 @@ module.exports = {
     buyPackage: async(req, res) => {
         try {
             const { user_id, id } = req.user;
-            const { amount, phase } = req.body;
+            const { amount } = req.body;
 
             // check if amount is greater then and equal to 25 or not
-            if(amount < 25 && amount % 5 != 0) {
-                return res.status(500).json({success: false, message: "You cannnot buy package below $25 & amount should be multiple of $5", data: []})
-            }
+            if(amount < 100) return res.status(500).json({success: false, message: "You cannnot buy package below $25", data: []})
 
             // check if user have enough balance in the wallet
             let userbalance = await Wallet.findOne({user_id: user_id});
-            if(userbalance === null || userbalance.balance < amount) {
-                return res.status(406).json({success: false, message: 'You dont have enough balance in the wallet', data: []})
-            }
+            console.log(userbalance.usdt_balance, ": User's Usdt Balance...");
+            
+            if(userbalance === null || userbalance.usdt_balance < amount) return res.status(406).json({success: false, message: 'Insufficient Wallet Balance', data: []})
+            
 
             // deduct balance from users wallet
             let deduct = await Wallet.updateOne(
                 { user_id: user_id },
                 {
                     $inc: {
-                        balance: -amount
+                        usdt_balance: -amount
                     }
                 }
             )
+
+            let roi_value, rank;
+            if(amount >= 100 && amount <= 500)  roi_value = 0.5, rank = "SILVER";
+            else if (amount >= 501 && amount <= 1000) roi_value = 0.6, rank = "GOLD";
+            else if (amount >= 1001 && amount <= 2500) roi_value = 0.7, rank = "PLATINUM";
+            else if (amount >= 2501 && amount <= 5000) roi_value = 0.8, rank = "DIAMOND";
+            else if (amount >= 5001) roi_value = 1, rank = "CROWN";
+           
+
             if(deduct.modifiedCount > 0) {
                 // Check if this is the user's first staking
                 let existingStakes = await Staking.find({ user_id: user_id });
                 let isFirstStaking = existingStakes.length === 0;
+                let staking_value = user?.self_staking + amount;
 
                 // create a staking transaction
-                let token = await Token.findOne({short_name: 'CCT'});
+                // let token = await Token.findOne({short_name: 'CCT'});
                 let obj = {
                     user_id: user_id,
                     id: id,
                     amount: amount,
-                    roi: 0.4,
+                    roi: roi_value,
                     currency: 'USDT',
-                    total: amount * 2.5,
+                    total: amount,
                     chain: 'BEP20',
-                    phase: phase
                 }
                 let stake = await Staking.create(obj);
 
                 // Update user's self-staking status
-                let updateFields = { staking_status: 'ACTIVE' };
+                let updateFields = { staking_status: 'ACTIVE', current_rank: rank, total_earning_potential: 300, self_staking: staking_value };
                 if (isFirstStaking) {
-                    updateFields.activation_date = new Date();
+                    updateFields.activation_date = new Date().toISOString();
                 }
                 await Users.updateOne(
                     { user_id: user_id },
                     { $set: updateFields }
                 );
 
-                // CARNIVAL DIRECT BONUS
-                // 5% Direct Bonus to sponser 
+                //  DIRECT REFERRAL BONUS
+                // 10% Direct Bonus to sponser 
+
+                console.log("Hello");
+                
                 let sponser = await Referral.findOne({user_id: id});
+                console.log(sponser, " : Sponser");
+                
                 if(sponser != null && sponser.sponser_id != null) {
+
                     console.log(sponser, " : SPONSER DATA")
                     // distribute direct bonus to sponsers wallet
-                    let direct_bonus = amount * 5 / 100;
+                    let direct_bonus = amount * 10 / 100;
+                    console.log(direct_bonus, " : Bonus");
 
                     // transfer bonus to sponsers wallet
                     await Wallet.updateOne(
                         { user_id: sponser.sponser_code},
                         {
                             $inc: {
-                                balance: direct_bonus
+                                usdt_balance: direct_bonus
                             }
                         }
                     )
+                    console.log("Wallets updated...");
 
                     // create transaction for direct bonus for sponser
                     let obj = {
@@ -87,12 +103,13 @@ module.exports = {
                         amount: direct_bonus,
                         staking_id: stake._id,
                         currency: 'USDT',
-                        transaction_type: 'DIRECT BONUS',
+                        transaction_type: 'DIRECT REFERRAL BONUS',
                         status: "COMPLETED",
                         from: user_id
                     }
 
                     await Transaction.create(obj);
+                    console.log("Transaction Created...");
                 }
             } else {
                 return res.status(500).json({success: false, message: 'Some error occured!!', data: []})
@@ -107,8 +124,8 @@ module.exports = {
     userPackageList: async(req, res) => {
         try {
             const { user_id } = req.user;
-            let data = await Staking.find({user_id: user_id});
-            return res.status(200).json({success: true, message: 'Staking Transaction Fetched!!', data: data})
+            let data = await Staking.find({user_id: user_id}).sort({createdAt: -1});
+            return res.status(200).json({success: true, message: 'Staking Transaction Fetched!!', data: data});
         } catch (error) {
             return res.status(500).json({success: false, message: error.message, data: []})
         }

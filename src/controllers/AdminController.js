@@ -85,7 +85,7 @@ module.exports = {
     // fetching sub admins list
     adminList: async(req, res) => {
         try {
-            let data = await Admin.find({admin_type: 0});
+            let data = await Admin.find({admin_type: 0}).sort({createdAt: -1});
             return res.status(200).json({success: true, message: 'Sub admin list fetched successfully!!', data: data})
         } catch (error) {
             return res.status(500).json({success: false, message: error.message, data: []})
@@ -518,25 +518,25 @@ module.exports = {
             // }
 
             let funds = await Wallet.findOne({user_id : user_id });
-            // console.log(funds, ":FUNDS BEFORE TRANSFER")
+            console.log(funds, ":FUNDS BEFORE TRANSFER")
 
             const add_funds = await Wallet.updateOne(
                 { user_id : user_id }, 
                 { 
-                    $inc: { balance: amount } 
+                    $inc: { usdt_balance: amount } 
                 }, 
                 { upsert: true }
             );
             let updatedFunds = await Wallet.findOne({user_id : user_id });
-            // console.log(updatedFunds, ":FUNDS AFETR TRANSFER")
+            console.log(updatedFunds, ":FUNDS AFETR TRANSFER")
 
             if (add_funds) {
                 let funds2 = await Wallet.findOne({user_id : user_id });
                 let transferObj = {};
                 transferObj.user_id = user_id;
                 transferObj.amount = amount;
-                transferObj.previous_balance = funds.balance;
-                transferObj.final_balance = updatedFunds.balance;
+                transferObj.previous_balance = funds.usdt_balance;
+                transferObj.final_balance = updatedFunds.usdt_balance;
                 transferObj.type = "CREDITED_BY_ADMIN";
 
                 let adminTransfer = await AdminTransfer.create(transferObj);
@@ -555,12 +555,11 @@ module.exports = {
             const { user_id, amount } = req.body; // Assuming userid and amount are sent in the request body
             
             let funds = await Wallet.findOne({user_id : user_id });
-            // console.log(funds, ": FUNDS BEFORE TRANSFER");
 
             const deduct_funds = await Wallet.updateOne(
                 { user_id : user_id }, 
                 { 
-                    $inc: { balance: -amount } 
+                    $inc: { usdt_balance: -amount } 
                 }, 
                 { upsert: true }
             );
@@ -572,8 +571,8 @@ module.exports = {
                 let transferObj = {};
                 transferObj.user_id = user_id;
                 transferObj.amount = amount;
-                transferObj.previous_balance = funds.balance;
-                transferObj.final_balance = updatedFunds.balance;
+                transferObj.previous_balance = funds.usdt_balance;
+                transferObj.final_balance = updatedFunds.usdt_balance;
                 transferObj.type = "DEBITED_BY_ADMIN";
 
                 let adminTransfer = await AdminTransfer.create(transferObj);
@@ -674,7 +673,7 @@ module.exports = {
 
     addUserStacking: async (req, res) => {
         try {
-            const { user_id, amount, phase } = req.body;
+            const { user_id, amount  } = req.body;
     
             // Check if the amount is greater than or equal to 25 and is a multiple of 5
             // if (amount < 25 || amount % 5 !== 0) {
@@ -694,28 +693,42 @@ module.exports = {
                     data: []
                 });
             }
+            console.log(user, "User Log");
+            
+            
             
             // Check if this is the user's first staking
             let existingStakes = await Staking.find({ user_id: user_id });
             let isFirstStaking = existingStakes.length === 0;
 
+            if(amount < 100) return res.status(400).json({ sucess: false, message : "Staking amount must be greater than 100", data: []})
 
+            let roi_value, rank;
+            if(amount >= 100 && amount <= 500)  roi_value = 0.5, rank = "SILVER";
+            else if (amount >= 501 && amount <= 1000) roi_value = 0.6, rank = "GOLD";
+            else if (amount >= 1001 && amount <= 2500) roi_value = 0.7, rank = "PLATINUM";
+            else if (amount >= 2501 && amount <= 5000) roi_value = 0.8, rank = "DIAMOND";
+            else if (amount >= 5001) roi_value = 1, rank = "CROWN";
+
+            console.log(roi_value, rank, "Logs");
+            let staking_value = user?.self_staking + amount;
             // Create a new stacking record
             let obj = {
                 user_id: user_id,
-                id: user._id,
+                id: user?._id,
                 amount: amount,
-                roi: 0.4,
+                roi: roi_value,
                 currency: 'USDT',
-                total: amount * 2.5,
+                total: amount,
                 chain: 'BEP20',
-                phase: phase,
-                type : 'ADMIN_STAKING'
-            };
+                type: "ADMIN_STAKING"
+            }
+            console.log(obj, "Obj logss");
+            
             let stake = await Staking.create(obj);
-    
+            
             // Update user's self-staking status
-            let updateFields = { staking_status: 'ACTIVE' };
+            let updateFields = { staking_status: 'ACTIVE',  current_rank: rank, total_earning_potential: 300, self_staking: staking_value };
             if (isFirstStaking) {
                 updateFields.activation_date = new Date();
             }
@@ -798,7 +811,6 @@ module.exports = {
                     remainingAmount -= stake.amount;
                     stake.deduct_amount = stake.amount;
                     stake.amount = 0;
-                    stake.phase = phase;
                     stake.type = 'ADMIN_DEDUCT_STAKING';
                 } else {
                     stake.deduct_amount = remainingAmount;

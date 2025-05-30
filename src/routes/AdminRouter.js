@@ -66,7 +66,7 @@ router
     .post('/v1/admin/add-user-stacking', AdminController.addUserStacking)
 
     //Deduct User Stacking
-    .post('/v1/admin/deduct-user-stacking', AdminController.deductUserStacking)
+    // .post('/v1/admin/deduct-user-stacking', AdminController.deductUserStacking)
     
     //Admin Stacking Transfer History
     .get('/v1/admin/admin-stacking-transfer-history', AdminController.adminStakingTransferHistory)

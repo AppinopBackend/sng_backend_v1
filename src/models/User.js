@@ -18,7 +18,7 @@ const userSchema = mongoose.Schema(
         self_staking: { type: Number, required: true, default : 0 },
         direct_referrals: { type: Number, required: true, default : 0},
         last_rank_achieve: { type: Date, required: false, default: null},
-        activation_date: { type: Date, required: true, default : new Date().toISOString()},
+        activation_date: { type: Date, required: false },
         carry_forward_business: { type: Number, required: false, default: 0 },
         // ranks: {
         //     SILVER: {

@@ -593,7 +593,6 @@ module.exports = {
         } catch (error) {
             return res.status(500).json({ success: false, message: error.message, data: [] });
         }
-
     },
 
     forgotPassword: async(req, res) => {
@@ -616,7 +615,7 @@ module.exports = {
             let check_otp = await Otps.findOne({ email_or_phone: email_or_phone });
             console.log(check_otp, verification_code, "Logss");
             
-            if(check_otp === null || check_otp.otp !== JSON.stringify(verification_code)) {
+            if(check_otp === null || check_otp.otp !== verification_code) {
                 return res.status(406).json({ success: false, message: 'OTP not matched!', data: [] });
             }
     
