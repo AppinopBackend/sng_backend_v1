@@ -55,7 +55,7 @@ module.exports = {
                     amount: amount,
                     roi: roi_value,
                     currency: 'USDT',
-                    total: amount,
+                    total: amount * 3,
                     chain: 'BEP20',
                 }
                 let stake = await Staking.create(obj);

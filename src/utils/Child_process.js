@@ -30,6 +30,7 @@ process.on('message', async(message) => {
                 console.log("inside super bonus function")
                 // Fetch all staking first
                 let staking = await Staking.find({status: 'RUNNING'});
+                console.log(staking, "Logs..");
                 
                 
                 const bulkStak = [];
@@ -639,7 +640,9 @@ process.on('message', async(message) => {
         };
 
         // Schedule the cron job
-        cron.schedule('21 17 * * *', () => {
+        cron.schedule('56 17 * * *', () => {
+            console.log('Starting....');
+            
             task();
         }, {
             scheduled: true,
