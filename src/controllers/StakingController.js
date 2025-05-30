@@ -45,7 +45,7 @@ module.exports = {
                 // Check if this is the user's first staking
                 let existingStakes = await Staking.find({ user_id: user_id });
                 let isFirstStaking = existingStakes.length === 0;
-                let staking_value = user?.self_staking + amount;
+                let staking_value = user?.self_staking + Number(amount);
 
                 // create a staking transaction
                 // let token = await Token.findOne({short_name: 'CCT'});
