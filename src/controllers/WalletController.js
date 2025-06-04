@@ -24,7 +24,7 @@ module.exports = {
         try {
             const { user_id, id } = req.user;
             const { amount, transaction_hash, chain } = req.body;
-            const deposit_slip = req.file.filename;
+            // const deposit_slip = req.file.filename;
 
             // check if this transaction hash already exists
             let check_transaction = await WalletTransaction.countDocuments({ transaction_hash: transaction_hash});
@@ -43,7 +43,7 @@ module.exports = {
                             user_id: user_id,
                             id: id,
                             amount:  amount,
-                            deposit_slip: deposit_slip,
+                            // deposit_slip: deposit_slip,
                             transaction_hash: transaction_hash,
                             chain: chain,
                             type: "DEPOSIT"
@@ -63,7 +63,7 @@ module.exports = {
                             user_id: user_id,
                             id: id,
                             amount:  amount,
-                            deposit_slip: deposit_slip,
+                            // deposit_slip: deposit_slip,
                             transaction_hash: transaction_hash,
                             chain: chain,
                             type: "DEPOSIT"
