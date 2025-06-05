@@ -9,7 +9,7 @@ const stakingSchema = mongoose.Schema(
         sng_price: { type: Number, required: true, default: 1 },
         amount: { type: Number, required: true },
         reward_percentage: { type: Number, required: true, default: 10 },
-        eqv_sng: { type: Number, required: true, default: function () { return this.amount + ((this.reward_percentage / 100) * this.amount) } },
+        eqv_sng: { type: Number, required: true, default: function () { return (this.amount + ((this.reward_percentage / 100) * this.amount))/this.sng_price } },
         paid: { type: Number, required: true, default: 0 },
         roi_paid: { type: Number, required: true, default: 0 },
         total_roi: { type: Number, required: true, default: function () { return this.amount * 2 } }, // 2x of amount (Both Cases...)

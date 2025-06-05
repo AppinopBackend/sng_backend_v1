@@ -680,6 +680,10 @@ module.exports = {
                 }));
                 response_data.push(receiver_transactions)
             }
+            console.log(sender_transactions, ": sender_transactions");
+            console.log(receiver_transactions, ": receiver_transactions");
+            console.log("Hello", response_data, ": response data log");
+            
             return res.status(200).json({
                 success: true,
                 message: message,

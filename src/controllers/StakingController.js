@@ -76,13 +76,20 @@ module.exports = {
 
                 let sponser = await Referral.findOne({ user_id: id });
                 console.log(sponser, " : Sponser");
-
+                let sponser_user = await User.findById(id);
+                console.log(sponser_user, ": Details of Sponser User...");
+                let sponser_user_staking = await Staking.findOne({id: sponser?.sponser_id}).sort({createdAt: -1});
+                console.log(sponser_user_staking, "Sponser User Staking...");   
+                let sponser_user_paid = sponser_user_staking?.paid;
+                console.log(sponser_user_paid, "Log");
+                                              
                 if (sponser != null && sponser.sponser_id != null) {
 
                     console.log(sponser, " : SPONSER DATA")
                     // distribute direct bonus to sponsers wallet
                     let direct_bonus = amount * 10 / 100;
                     console.log(direct_bonus, " : Bonus");
+                    let updatedPaid = sponser_user_paid+ direct_bonus
 
                     // transfer bonus to sponsers wallet
                     await Wallet.updateOne(
@@ -95,6 +102,10 @@ module.exports = {
                     )
                     console.log("Wallets updated...");
 
+                    // update paid value in sponser user latest staking transaction
+                    let response = await Staking.findByIdAndUpdate(sponser_user_staking?._id, { paid: updatedPaid }, { new: true });
+                    console.log(response, "Staking Updated");
+
                     // create transaction for direct bonus for sponser
                     let obj = {
                         user_id: sponser.sponser_code,
@@ -104,9 +115,10 @@ module.exports = {
                         currency: 'USDT',
                         transaction_type: 'DIRECT REFERRAL BONUS',
                         status: "COMPLETED",
-                        from: user_id
+                        from: user_id,
+                        paid: updatedPaid,
+                        income_type: 'sng_direct_referral'
                     }
-
                     await Transaction.create(obj);
                     console.log("Transaction Created...");
                 }
