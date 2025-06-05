@@ -77,11 +77,9 @@ module.exports = {
                 let sponser = await Referral.findOne({ user_id: id });
                 console.log(sponser, " : Sponser");
                 let sponser_user = await User.findById(id);
-                console.log(sponser_user, ": Details of Sponser User...");
                 let sponser_user_staking = await Staking.findOne({id: sponser?.sponser_id}).sort({createdAt: -1});
-                console.log(sponser_user_staking, "Sponser User Staking...");   
+                let sponse_user_total = sponser_user_staking?.total;
                 let sponser_user_paid = sponser_user_staking?.paid;
-                console.log(sponser_user_paid, "Log");
                                               
                 if (sponser != null && sponser.sponser_id != null) {
 
@@ -103,9 +101,8 @@ module.exports = {
                     console.log("Wallets updated...");
 
                     // update paid value in sponser user latest staking transaction
-                    let response = await Staking.findByIdAndUpdate(sponser_user_staking?._id, { paid: updatedPaid }, { new: true });
-                    console.log(response, "Staking Updated");
-
+                    if(sponse_user_total > sponser_user_paid) await Staking.findByIdAndUpdate(sponser_user_staking?._id, { paid: updatedPaid }, { new: true });
+                    
                     // create transaction for direct bonus for sponser
                     let obj = {
                         user_id: sponser.sponser_code,
