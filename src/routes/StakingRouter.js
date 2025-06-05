@@ -5,7 +5,7 @@ const { token_verification } = require('../middleware/TokenVerification')
 
 router
     // Stake package
-    .post('/v1/stake/buy-package',[token_verification], StakingController.buyPackage)
+    .post('/v1/stake/buy-package', [token_verification], StakingController.buyPackage)
 
     // Get Staking list
     .get('/v1/stake/user-package-list', [token_verification], StakingController.userPackageList)

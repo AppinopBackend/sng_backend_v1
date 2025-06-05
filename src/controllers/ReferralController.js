@@ -6,20 +6,20 @@ module.exports = {
     directReferred: async (req, res) => {
         try {
             const { id, index } = req.query;
-            const members = await Referral.find({ sponser_id: id });            
+            const members = await Referral.find({ sponser_id: id });
             const userIds = members.map(member => member.user_id);
             const userCodes = members.map(member => member.user_code);
             const users = await Users.find({ _id: { $in: userIds } }, { password: 0, ranks: 0 }).lean();
-            const stacking_details = await Staking.find({user_id : {$in: userCodes}});
+            const stacking_details = await Staking.find({ user_id: { $in: userCodes } });
 
             // Create a map to hold the running staking package count for each user
             const runningStakingCounts = {};
-            
+
             for await (const userId of userIds) {
                 const runningStakingPackages = await Staking.find({ user_id: userId, status: 'RUNNING' });
                 runningStakingCounts[userId] = runningStakingPackages.length;
             }
-          
+
             // Map users with additional data including staking amount
             const data = users.map(user => {
                 const userStackingDetails = stacking_details.find(detail => detail.user_id === user.user_id);
@@ -33,7 +33,7 @@ module.exports = {
                     self_stacking_amount: userStackingDetails ? userStackingDetails.amount : 0
                 };
             });
-            
+
             return res.status(200).json({
                 success: true,
                 message: 'Direct referred fetched!!',
@@ -46,13 +46,14 @@ module.exports = {
                 data: []
             });
         }
-    },    
+    },
 
     getDownlineTeam: async (req, res) => {
         try {
             const { id } = req.user;
             let team = [{ userId: id, level: 0 }];
             let allMembers = [];
+            let direct_referrals = await Referral.find({ sponser_id: id });
 
             while (team.length > 0) {
                 const current = team.shift();
@@ -129,38 +130,38 @@ module.exports = {
                 // individualAmounts: stackingLookup[user._id] ? stackingLookup[user._id].individualAmounts : []
             }));
 
-            return res.status(200).json({ success: true, message: 'Team details fetched successfully!!', data: details, business: total, });
+            return res.status(200).json({ success: true, message: 'Team details fetched successfully!!', data: details, business: total, direct: direct_referrals.length });
         } catch (error) {
             return res.status(500).json({ success: false, message: error.message, data: [] });
         }
     },
-    
+
     getDownlineTeam2: async (id) => {
         try {
             let team = [{ userId: id, level: 0 }];
             let allMembers = [];
-    
+
             while (team.length > 0) {
                 const current = team.shift();
                 const direct = await Referral.find({ sponser_id: current.userId }).lean();
-    
+
                 if (direct.length > 0) {
                     const levelMembers = direct.map(member => ({
                         userId: member.user_id,
                         level: current.level + 1
                     }));
-    
+
                     team.push(...levelMembers);
                     allMembers.push(...levelMembers);
                 }
             }
-    
+
             // Create a lookup object to associate user IDs with their levels
             const memberLevels = allMembers.reduce((acc, member) => {
                 acc[member.userId] = member.level;
                 return acc;
             }, {});
-    
+
             // Fetch user details and include their levels in the response
             let details = await Users.find({ _id: { $in: Object.keys(memberLevels) } }, { password: 0 }).lean();
             details = details.map(user => ({
@@ -172,8 +173,8 @@ module.exports = {
                 {
                     $match: {
                         $and: [
-                            {id: { $in: Object.keys(memberLevels) }},
-                            {status: "RUNNING"}
+                            { id: { $in: Object.keys(memberLevels) } },
+                            { status: "RUNNING" }
                         ]
                     }
                 },
@@ -191,27 +192,27 @@ module.exports = {
             return res.status(500).json({ success: false, message: error.message, data: [] });
         }
     },
-    
+
     getDownlineTeam3: async (id, date) => {
         try {
             let team = [{ userId: id, level: 0 }];
             let allMembers = [];
-    
+
             while (team.length > 0) {
                 const current = team.shift();
                 const direct = await Referral.find({ sponser_id: current.userId }).lean();
-    
+
                 if (direct.length > 0) {
                     const levelMembers = direct.map(member => ({
                         userId: member.user_id,
                         level: current.level + 1
                     }));
-    
+
                     team.push(...levelMembers);
                     allMembers.push(...levelMembers);
                 }
             }
-    
+
             // Create a lookup object to associate user IDs with their levels
             const memberLevels = allMembers.reduce((acc, member) => {
                 acc[member.userId] = member.level;
@@ -220,22 +221,22 @@ module.exports = {
             // id = id.toString()
             // memberLevels[`${id}`] = 0
             // console.log(memberLevels, " : memberLevels")
-    
+
             // Fetch user details and include their levels in the response
             let details = await Users.find({ _id: { $in: Object.keys(memberLevels) } }, { password: 0 }).lean();
             details = details.map(user => ({
                 ...user,
                 level: memberLevels[user._id]
             }));
-    
+
             // Fetch staking details for each user
             let query;
-            if(date != null) {
+            if (date != null) {
                 query = {
                     $match: {
                         $and: [
-                            {id: { $in: Object.keys(memberLevels) }},
-                            { createdAt: { $gte: date}}
+                            { id: { $in: Object.keys(memberLevels) } },
+                            { createdAt: { $gte: date } }
                         ]
                     }
                 }
@@ -243,7 +244,7 @@ module.exports = {
                 query = {
                     $match: {
                         $and: [
-                            {id: { $in: Object.keys(memberLevels) }},
+                            { id: { $in: Object.keys(memberLevels) } },
                         ]
                     }
                 }
@@ -257,24 +258,24 @@ module.exports = {
                     }
                 }
             ]);
-    
+
             // Create a lookup object for staking amounts
             const stakingLookup = stakingDetails.reduce((acc, staking) => {
                 acc[staking._id] = staking.totalStackQuantity;
                 return acc;
             }, {});
-    
+
             // Add staking amount to each user's details
             details = details.map(user => ({
                 ...user,
                 stakingAmount: stakingLookup[user._id] || 0
             }));
-    
+
             return details;
         } catch (error) {
             throw new Error(error.message);
         }
-    },    
+    },
 
     getUplineTeam: async (id) => {
         try {
@@ -285,15 +286,15 @@ module.exports = {
                 const current = team.shift();
                 const user = await Referral.findOne({ user_id: current.userId }).lean();
                 if (!user) continue;
-                
+
                 const sponsor = await Referral.findOne({ user_id: user.sponser_id }).lean();
                 if (!sponsor) break;
-                
+
                 team.push({ userId: sponsor.user_id, level: current.level + 1 });
                 allSponsors.push({ userId: sponsor.user_id, level: current.level + 1 });
                 // console.log(user, " : user")
             }
-    
+
             // Create a lookup object to associate user IDs with their levels
             const sponsorLevels = allSponsors.reduce((acc, sponsor) => {
                 acc[sponsor.userId] = sponsor.level;
@@ -307,11 +308,54 @@ module.exports = {
                 level: sponsorLevels[user._id],
                 id: (user._id).toString()
             }));
-    
+
             console.log('details')
             return details;
         } catch (error) {
             throw new Error(error.message);
         }
-    }   
+    },
+
+    getUplineTeam2: async (req, res) => {
+        try {
+            const { id } = req.user;
+            let team = [{ userId: id, level: 0 }];
+            console.log(team, " : Team");
+
+            let allSponsors = [];
+
+            while (team.length > 0) {
+                const current = team.shift();
+                const user = await Referral.findOne({ user_id: current.userId }).lean();
+                if (!user) continue;
+
+                const sponsor = await Referral.findOne({ user_id: user.sponser_id }).lean();
+                if (!sponsor) break;
+
+                team.push({ userId: sponsor.user_id, level: current.level + 1 });
+                allSponsors.push({ userId: sponsor.user_id, level: current.level + 1 });
+                // console.log(user, " : user")
+            }
+
+            // Create a lookup object to associate user IDs with their levels
+            const sponsorLevels = allSponsors.reduce((acc, sponsor) => {
+                acc[sponsor.userId] = sponsor.level;
+                return acc;
+            }, {});
+            console.log(sponsorLevels, " : sponsorLevels")
+            console.log(Object.keys(sponsorLevels), " : sponsorLevels2")
+            // Fetch user details and include their levels in the response
+            let details = await Users.find({ _id: { $in: Object.keys(sponsorLevels) } }, { password: 0, ranks: 0 }).lean();
+            details = details.map(user => ({
+                ...user,
+                level: sponsorLevels[user._id],
+                id: (user._id).toString()
+            }));
+
+            console.log('details')
+            return res.status(200).json({ success: true, message: "Upline team fetched", data: details });
+        } catch (error) {
+            throw new Error(error.message);
+        }
+    }
 }

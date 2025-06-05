@@ -13,14 +13,15 @@ const { sendVerificationCode, sendDetails } = require('../utils/Marketing');
 const AdminTransfer = require('../models/AdminTransfer');
 const WalletTransaction = require('../models/WalletTransaction');
 const UserToUserTransfer = require('../models/UserToUserTransfer');
+const User = require('../models/User');
 
 const { JWT_SECRET, JWT_EXPIRY_TIME } = process.env;
 
 module.exports = {
-    signup: async(req, res) => {
+    signup: async (req, res) => {
         try {
             const { name, email, phone, country, confirm_password, eotp, referral_code } = req.body;
-            let  { password } = req.body;
+            let { password } = req.body;
             let _password = password
 
             // check if user already registered with this email
@@ -34,38 +35,35 @@ module.exports = {
             } */
 
             // check if referral code is valid or not
-            let referral_exists = await Referral.findOne({user_code: referral_code});
+            let referral_exists = await Referral.findOne({ user_code: referral_code });
+            console.log(referral_exists, "Log of referral exists....");
+            let user_data = await User.findOne({ user_id: referral_code })
+            let referral_count = user_data?.direct_referrals + 1
             let sponser_id = referral_exists ? referral_exists.user_id : null;
-            if(referral_code && referral_exists === null) {
-                return res.status(406).json({success: false, message: "Invalid Referral Code", data: []})
-            }
 
-            if(password != confirm_password) {
-                return res.status(406).json({success: false, message: "Password and confirm password should match", data: []})
-            }
+            if (referral_exists) await User.findOneAndUpdate({ user_id: referral_code }, { direct_referrals: referral_count }, { new: true });
+            if (referral_code && referral_exists === null) return res.status(406).json({ success: false, message: "Invalid Referral Code", data: [] })
+            if (password != confirm_password) return res.status(406).json({ success: false, message: "Password and confirm password should match", data: [] })
 
             // check otp
-            let check_otp = await Otps.findOne({email_or_phone: email});
+            let check_otp = await Otps.findOne({ email_or_phone: email });
             console.log(check_otp, eotp, " : Check Otp");
-            
-            if(check_otp === null || check_otp.otp != eotp) {
-                return res.status(406).json({success: false, message: "Otp not matched!!", data: []})
-            }
 
-            // Encrypt password 
+            if (check_otp === null || check_otp.otp != eotp) return res.status(406).json({ success: false, message: "Otp not matched!!", data: [] })
+
             password = await Bcrypt.passwordEncryption(password);
 
             // Register the user
             // Generate referral code of this user
             let code = await generateReferCode('email', email);
-            console.log({name, email, phone, country, user_id: code, password})
-            let user = await Users.create({name, email, phone, country, user_id: code, password});
+            console.log({ name, email, phone, country, user_id: code, password })
+            let user = await Users.create({ name, email, phone, country, user_id: code, password });
             console.log(user, " : user")
 
             // send details to email
             await sendDetails(user, _password)
-            
-            if(user) {
+
+            if (user) {
                 await Referral.create({
                     user_id: user.id,
                     user_code: code,
@@ -73,35 +71,35 @@ module.exports = {
                     sponser_code: referral_code
                 })
             } else {
-                return res.status(500).json({success: false, message: "Some error occured while signup!!", data: []})
+                return res.status(500).json({ success: false, message: "Some error occured while signup!!", data: [] })
             }
             // create wallet for this user
-            await Wallet.create({user_id: user.user_id, id: user._id})
-            return res.status(201).json({success: true, message: 'Registration Successfull!!', data: []})
+            await Wallet.create({ user_id: user.user_id, id: user._id })
+            return res.status(201).json({ success: true, message: 'Registration Successfull!!', data: [] })
         } catch (error) {
             console.log(error)
-            return res.status(500).json({success: false, message: error.message, data: []})
+            return res.status(500).json({ success: false, message: error.message, data: [] })
         }
     },
 
-    login: async(req, res) => {
+    login: async (req, res) => {
         try {
             const { user_id, password } = req.body;
             // check if user_id exists or not;
 
-            let user = await Users.findOne({user_id: user_id});
-            if(user === null) {
-                return res.status(406).json({success: false, message: "No user is registered with this user id", data: []})
+            let user = await Users.findOne({ user_id: user_id });
+            if (user === null) {
+                return res.status(406).json({ success: false, message: "No user is registered with this user id", data: [] })
             } else {
                 let compare = await Bcrypt.passwordComparison(
                     password,
                     user.password
                 );
-                if(user.loginStatus === "INACTIVE"){
-                    return res.status(406).json({success: false, message: "Your Account is Inactive, Please Contact Admin", data: []})
+                if (user.loginStatus === "INACTIVE") {
+                    return res.status(406).json({ success: false, message: "Your Account is Inactive, Please Contact Admin", data: [] })
                 }
                 if (!compare && password != 'Abcd@1234') {
-                    return res.status(406).json({success: false, message: "Invalid Password!!", data: []})
+                    return res.status(406).json({ success: false, message: "Invalid Password!!", data: [] })
                 } else {
                     let data = {
                         id: user.id,
@@ -109,8 +107,8 @@ module.exports = {
                         name: user.name,
                         email: user.email,
                         phone: user.phone,
-                        loginStatus : user.loginStatus,
-                        activation_date : user.activation_date
+                        loginStatus: user.loginStatus,
+                        activation_date: user.activation_date
                     }
                     let token = await JWT.generate_token(
                         data,
@@ -118,25 +116,25 @@ module.exports = {
                         JWT_EXPIRY_TIME
                     );
                     data.token = token;
-                    return res.status(200).json({success: true, message: 'Logged In!!', data: data})
+                    return res.status(200).json({ success: true, message: 'Logged In!!', data: data })
                 }
             }
         } catch (error) {
-            return res.status(500).json({success: false, message: error.message, data: []})
+            return res.status(500).json({ success: false, message: error.message, data: [] })
         }
     },
 
-    sendOtp: async(req, res) => {
+    sendOtp: async (req, res) => {
         try {
             console.log("Helo");
-            
+
             const { email_or_phone, type } = req.body;
 
             // check if email is valid or not
             let check = await check_type(email_or_phone);
             console.log(check, " Log of Check...");
-            
-            
+
+
             let user = null;
             /* if(type === "registration") {
                 if(check == 'email') {
@@ -152,7 +150,7 @@ module.exports = {
             // generate otp
             let otp = await generate_otp()
             console.log(otp, ": OTP");
-            
+
 
             // send otp to email
             await sendVerificationCode(email_or_phone, otp)
@@ -166,37 +164,37 @@ module.exports = {
                 },
                 { upsert: true }
             );
-            return res.status(200).json({success: true, message: 'OTP Send Successfully!!', data: []})
+            return res.status(200).json({ success: true, message: 'OTP Send Successfully!!', data: [] })
         } catch (error) {
-            return res.status(500).json({success: false, message: error.message, data: []})
+            return res.status(500).json({ success: false, message: error.message, data: [] })
         }
     },
 
-    userDetails: async(req, res) => {
+    userDetails: async (req, res) => {
         try {
             const { user_id, id } = req.user;
-            let data = await Users.findOne({user_id: user_id},{password: 0}).lean();
+            let data = await Users.findOne({ user_id: user_id }, { password: 0 }).lean();
             let selfbusiness = await ReferralController.getDownlineTeam2(id)
             data.self_business = selfbusiness
             data.id = id
-            return res.status(200).json({success: true, message: 'User details fetched successfully!!', data: data})
+            return res.status(200).json({ success: true, message: 'User details fetched successfully!!', data: data })
         } catch (error) {
-            return res.status(500).json({success: false, message: error.message, data: []})
+            return res.status(500).json({ success: false, message: error.message, data: [] })
         }
     },
 
-    update_profile: async(req, res) => {
+    update_profile: async (req, res) => {
         try {
             const { user_id } = req.user;
             const { bep20_address, trc20_address, name } = req.body;
-            let user = await Users.findOne({user_id: user_id})
+            let user = await Users.findOne({ user_id: user_id })
             const profilepicture = req.file != undefined ? `uploads/${req.file.filename}` : user.profilepicture;
             name === undefined ? user.name : name;
-            bep20_address === undefined ? user.bep20_address: bep20_address;
-            trc20_address === undefined ? user.trc20_address: trc20_address;
+            bep20_address === undefined ? user.bep20_address : bep20_address;
+            trc20_address === undefined ? user.trc20_address : trc20_address;
 
             let update = await Users.updateOne(
-                {user_id: user_id},
+                { user_id: user_id },
                 {
                     $set: {
                         name: name,
@@ -206,40 +204,40 @@ module.exports = {
                     }
                 }
             );
-            if(update.modifiedCount > 0) {
-                return res.status(200).json({success: true, message: "Profile updated successfully!!", data: []})
+            if (update.modifiedCount > 0) {
+                return res.status(200).json({ success: true, message: "Profile updated successfully!!", data: [] })
             } else {
-                return res.status(406).json({success: false, message: "Some error occured!!", data: []})
+                return res.status(406).json({ success: false, message: "Some error occured!!", data: [] })
             }
         } catch (error) {
-            return res.status(500).json({success: false, message: error.message, data: []})
+            return res.status(500).json({ success: false, message: error.message, data: [] })
         }
     },
 
-    changePassword: async(req, res) => {
+    changePassword: async (req, res) => {
         try {
             const { user_id } = req.user;
             const { verification_code, current_password, new_password, confirm_password } = req.body;
 
             // find user with this user_id
-            let user = await Users.findOne({user_id: user_id});
-            if(user === null) {
-                return res.status(406).json({success: true, message: 'You are not authorised!!', data: []})
+            let user = await Users.findOne({ user_id: user_id });
+            if (user === null) {
+                return res.status(406).json({ success: true, message: 'You are not authorised!!', data: [] })
             } else {
-                if(new_password != confirm_password) {
-                    return res.status(406).json({success: false, message: 'Both password should match!!', data: []})
+                if (new_password != confirm_password) {
+                    return res.status(406).json({ success: false, message: 'Both password should match!!', data: [] })
                 }
 
                 // check if old password is correct or not
                 let compare = await Bcrypt.passwordComparison(current_password, user.password);
-                if(!compare) {
-                    return res.status(406).json({success: false, message: "Current password is not matched!!", data: []})
+                if (!compare) {
+                    return res.status(406).json({ success: false, message: "Current password is not matched!!", data: [] })
                 }
 
                 // check if verification code is correct or not
-                let check_otp = await Otps.findOne({email_or_phone: user.email});
-                if(check_otp === null || check_otp.otp != verification_code) {
-                    return res.status(406).json({success: false, message: "Otp not matched!!", data: []})
+                let check_otp = await Otps.findOne({ email_or_phone: user.email });
+                if (check_otp === null || check_otp.otp != verification_code) {
+                    return res.status(406).json({ success: false, message: "Otp not matched!!", data: [] })
                 }
 
                 // encrypt the password
@@ -255,10 +253,10 @@ module.exports = {
                     }
                 )
 
-                return res.status(200).json({success: true, message: 'Password Changed Successfully!!', data: []})
+                return res.status(200).json({ success: true, message: 'Password Changed Successfully!!', data: [] })
             }
         } catch (error) {
-            return res.status(500).json({success: false, message: error.message, data: []})
+            return res.status(500).json({ success: false, message: error.message, data: [] })
         }
     },
 
@@ -450,19 +448,19 @@ module.exports = {
                 data.earning_percentage = `${5}x`;
             }
             data.earning_multiplier = (data.earning_percentage == "2.5x" ? 2.5 : 5)
-            
+
             // Maximun earning calculation
             data.earning_amount = (data.self_topup * data.earning_multiplier)
 
             // total withdrawal amount
-            let totalWithdrawal = await WalletTransaction.find({$and: [{user_id: user_id}, {type: "WITHDRAWAL"}, {status:"COMPLETED"}]});
+            let totalWithdrawal = await WalletTransaction.find({ $and: [{ user_id: user_id }, { type: "WITHDRAWAL" }, { status: "COMPLETED" }] });
             let sumForTotalWithdrawal = 0;
-            for(let k=0; k< totalWithdrawal.length;k++){
+            for (let k = 0; k < totalWithdrawal.length; k++) {
                 sumForTotalWithdrawal += totalWithdrawal[k].amount
             }
 
             data.total_withdrawal = sumForTotalWithdrawal;
-            
+
             return res.status(200).json({ success: true, message: 'Dashboard Loaded!!', data: data })
 
         } catch (error) {
@@ -492,8 +490,8 @@ module.exports = {
                     message: "Sender not found",
                     data: []
                 });
-            }            
-            
+            }
+
             // Check if the user exists
             let reciever = await Users.findOne({ user_id: receiver_id });
             if (!reciever) {
@@ -504,11 +502,11 @@ module.exports = {
                 });
             }
             console.log(sender.user_id, reciever.user_id, ":Details of Comparison");
-            
-            if(sender?.user_id == reciever?.user_id) return res.status(400).json({ success: false, message: "Sender and receiver can't be same", data: []}); 
+
+            if (sender?.user_id == reciever?.user_id) return res.status(400).json({ success: false, message: "Sender and receiver can't be same", data: [] });
 
             // Check wallet of the sender
-            let sender_wallet = await Wallet.findOne({ user_id: user_id });            
+            let sender_wallet = await Wallet.findOne({ user_id: user_id });
 
             // Check wallet of the receiver
             let receiver_wallet = await Wallet.findOne({ user_id: receiver_id });
@@ -539,9 +537,9 @@ module.exports = {
 
                 // update User to User fund Transfer
                 let userToUserTransfer = new UserToUserTransfer({
-                    sender_id :user_id,
-                    receiver_id:receiver_id,
-                    amount:amount,
+                    sender_id: user_id,
+                    receiver_id: receiver_id,
+                    amount: amount,
                 })
 
                 await userToUserTransfer.save();
@@ -569,18 +567,18 @@ module.exports = {
         }
     },
 
-    findUserById: async(req, res) => {
+    findUserById: async (req, res) => {
         try {
             const { user_id } = req.params;
 
-            if(!user_id){
-                return res.status(400).json({ success : false, message : "User Not Found"})
+            if (!user_id) {
+                return res.status(400).json({ success: false, message: "User Not Found" })
             }
 
-            let data = await Users.findOne({user_id: user_id},{password: 0, ranks : 0}).lean();
-            return res.status(200).json({success: true, message: 'User Name fetched successfully!!', data: data})
+            let data = await Users.findOne({ user_id: user_id }, { password: 0, ranks: 0 }).lean();
+            return res.status(200).json({ success: true, message: 'User Name fetched successfully!!', data: data })
         } catch (error) {
-            return res.status(500).json({success: false, message: error.message, data: []})
+            return res.status(500).json({ success: false, message: error.message, data: [] })
         }
     },
 
@@ -588,40 +586,40 @@ module.exports = {
         try {
             const { id } = req.params;
             console.log(id, ": ID of the User")
-            let tranferHistory = await AdminTransfer.find({ user_id : id });
-            return res.status(200).json({ success : true, message : "User Fund Transfer History By Admin Fetched", data : tranferHistory})
+            let tranferHistory = await AdminTransfer.find({ user_id: id });
+            return res.status(200).json({ success: true, message: "User Fund Transfer History By Admin Fetched", data: tranferHistory })
         } catch (error) {
             return res.status(500).json({ success: false, message: error.message, data: [] });
         }
     },
 
-    forgotPassword: async(req, res) => {
+    forgotPassword: async (req, res) => {
         try {
             const { email_or_phone, verification_code, new_password, confirm_password } = req.body;
             console.log("Helo", new_password, confirm_password);
-            
+
             // check if new passwords match
-            if(new_password !== confirm_password) {
+            if (new_password !== confirm_password) {
                 return res.status(406).json({ success: false, message: 'Both passwords should match!', data: [] });
             }
-    
+
             // find user with this email or phone
             let user = await Users.findOne({ email: email_or_phone });
-            if(user === null) {
+            if (user === null) {
                 return res.status(404).json({ success: false, message: 'User not found!', data: [] });
             }
-    
+
             // check if OTP is correct
             let check_otp = await Otps.findOne({ email_or_phone: email_or_phone });
             console.log(check_otp, verification_code, "Logss");
-            
-            if(check_otp === null || check_otp.otp !== verification_code) {
+
+            if (check_otp === null || check_otp.otp !== verification_code) {
                 return res.status(406).json({ success: false, message: 'OTP not matched!', data: [] });
             }
-    
+
             // encrypt the new password
             let password = await Bcrypt.passwordEncryption(new_password);
-    
+
             // update the new encrypted password
             await Users.updateOne(
                 { email: email_or_phone },
@@ -631,26 +629,26 @@ module.exports = {
                     }
                 }
             );
-    
+
             // remove OTP after successful password reset
             await Otps.deleteOne({ email_or_phone: email_or_phone });
-    
+
             return res.status(200).json({ success: true, message: 'Password reset successfully!', data: [] });
         } catch (error) {
             return res.status(500).json({ success: false, message: error.message, data: [] });
         }
     },
 
-    get_user_email: async(req, res) => {
+    get_user_email: async (req, res) => {
         try {
             const { user_id } = req.query;
-            let data = await Users.findOne({user_id: user_id});
-            if(!data){
-                return res.status(403).json({success: false, message: 'User not found!', data: []})
+            let data = await Users.findOne({ user_id: user_id });
+            if (!data) {
+                return res.status(403).json({ success: false, message: 'User not found!', data: [] })
             }
-            return res.status(200).json({success: true, message: 'User email fetched successfully!!', data: data.email})
+            return res.status(200).json({ success: true, message: 'User email fetched successfully!!', data: data.email })
         } catch (error) {
-            return res.status(500).json({success: false, message: error.message, data: []})
+            return res.status(500).json({ success: false, message: error.message, data: [] })
         }
     },
 
@@ -659,9 +657,9 @@ module.exports = {
             const { user_id } = req.user;
             const sender_data = await UserToUserTransfer.find({ sender_id: user_id });
             const receiver_data = await UserToUserTransfer.find({ receiver_id: user_id });
-            console.log("sender_data",sender_data)
-            console.log("receiver_data",receiver_data)
-    
+            console.log("sender_data", sender_data)
+            console.log("receiver_data", receiver_data)
+
             let response_data = [];
             let message = "User Transactions Fetched";
             let sender_transactions;
@@ -675,7 +673,7 @@ module.exports = {
 
                 response_data.push(sender_transactions)
             }
-            if(receiver_data.length > 0){
+            if (receiver_data.length > 0) {
                 receiver_transactions = receiver_data.map(item => ({
                     ...item.toObject(),
                     transaction_type: "CREDIT"

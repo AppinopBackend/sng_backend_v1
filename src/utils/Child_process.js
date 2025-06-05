@@ -1,5 +1,5 @@
 const EventEmitter = require('node:events');
-class MyEmitter extends EventEmitter {}
+class MyEmitter extends EventEmitter { }
 const myEmitter = new MyEmitter();
 
 const cron = require('node-cron');
@@ -8,7 +8,7 @@ const moment = require('moment-timezone');
 console.log('Cron job scheduled to run at 12:01 AM IST');
 
 
-process.on('message', async(message) => {
+process.on('message', async (message) => {
     try {
         require('dotenv').config({ path: '../src/config/.env' });
         const config = require("../config/config");
@@ -29,16 +29,14 @@ process.on('message', async(message) => {
             try {
                 console.log("inside super bonus function")
                 // Fetch all staking first
-                let staking = await Staking.find({status: 'RUNNING'});
-                console.log(staking, "Logs..");
-                
-                
+                let staking = await Staking.find({ status: 'RUNNING', user_id: '247066' });
+
                 const bulkStak = [];
                 const bulkTransactions = [];
                 const bulkWallet = [];
                 for (const stake of staking) {
                     console.log(stake, "Log of Single Stake");
-                    
+
                     let totalpaid = (stake.paid + stake.amount);
                     console.log(totalpaid, " : Total Paid Value");
                     if (totalpaid < stake.total) {
@@ -74,25 +72,32 @@ process.on('message', async(message) => {
                         //SNG LEVEL BONUS
                         // find upline for this single user to distribute level bonus
                         let upline = await ReferralController.getUplineTeam(stake.id)
-                        console.log(upline, `UPLINE TEAM OF USER ID ${stake.id}`)
+                        let direct = await Referral.find({ sponser_id: stake.id });
+                        let direct_count = direct.length
+                        console.log(direct_count, "Log of direct length");
+
+                        console.log(upline, `UPLINE TEAM OF USER ID ${stake.id}`);
+
                         if (upline.length > 0) {
                             for await (const up of upline) {
+                                console.log(up, direct_count, "Up logss and direct count...");
+
                                 let level_bonus;
-                                if (up.level == 1) {
+                                if (up.level == 1 && direct_count >= 1) {
                                     level_bonus = interest * 10 / 100;
-                                } else if (up.level == 2) {
+                                } else if (up.level == 2 && direct_count >= 2) {
                                     level_bonus = interest * 8 / 100;
-                                } else if (up.level == 3) {
+                                } else if (up.level == 3 && direct_count >= 3) {
                                     level_bonus = interest * 5 / 100;
-                                } else if (up.level == 4) {
+                                } else if (up.level == 4 && direct_count >= 4) {
                                     level_bonus = interest * 4 / 100;
-                                } else if (up.level == 5 || up.level == 6 || up.level == 7) {
+                                } else if ((up.level == 5 || up.level == 6 || up.level == 7) && direct_count >= 5) {
                                     level_bonus = interest * 3 / 100;
-                                } else if (up.level == 8 || up.level == 9 || up.level == 10 ) {
+                                } else if ((up.level == 8 || up.level == 9 || up.level == 10) && direct_count >= 7) {
                                     level_bonus = interest * 2 / 100;
-                                } else if (up.level == 11 || up.level == 12 || up.level == 13 ) {
+                                } else if ((up.level == 11 || up.level == 12 || up.level == 13) && direct_count >= 8) {
                                     level_bonus = interest * 1 / 100;
-                                } else if (up.level == 11 || up.level == 12 || up.level == 13 ) {
+                                } else if ((up.level == 11 || up.level == 12 || up.level == 13) && direct_count >= 10) {
                                     level_bonus = interest * 0.5 / 100;
                                 } else {
                                     console.log(up.level)
@@ -175,10 +180,10 @@ process.on('message', async(message) => {
         //             if(last.length > 0) {
         //                 let lastDate = new Date(last[0].createdAt); // Convert to Date object if not already
         //                 let currentDate = new Date();
-    
+
         //                 // Calculate the difference in milliseconds
         //                 let diffInMilliseconds = currentDate - lastDate;
-    
+
         //                 // Convert milliseconds to days
         //                 let diffInDays = diffInMilliseconds / (1000 * 60 * 60 * 24);
 
@@ -265,13 +270,13 @@ process.on('message', async(message) => {
             try {
                 // fetch token details
                 console.log("inside carnival corporate token bonus function");
-                let token = await Token.findOne({short_name: 'CCT'});
-                let staking = await Staking.find({status: 'RUNNING'});
-        
+                let token = await Token.findOne({ short_name: 'CCT' });
+                let staking = await Staking.find({ status: 'RUNNING' });
+
                 const bulkTransactions = [];
                 const bulkStak = [];
                 const bulkWallet = [];
-        
+
                 for await (const stake of staking) {
                     // Fetch the user to get the activation_date
                     let user = await User.findOne({ user_id: 'CARN919175' });
@@ -315,7 +320,7 @@ process.on('message', async(message) => {
                         let interest = stake.amount * token.cct_roi / 100;
                         interest = interest / token.cct_price;
                         console.log(interest, ": interest");
-        
+
                         // Check if there has been a previous CCT transaction for this staking
                         if (last.length > 0) {
                             let lastDate = new Date(last[0].createdAt); // Convert to Date object if not already
@@ -377,41 +382,41 @@ process.on('message', async(message) => {
                         }
                     }
                 }
-        
+
                 // Execute bulk operations
                 if (bulkStak.length > 0) {
                     await Staking.bulkWrite(bulkStak);
                 }
-        
+
                 // Insert transactions in bulk
                 if (bulkTransactions.length > 0) {
                     await Transaction.insertMany(bulkTransactions);
                 }
-        
+
                 if (bulkWallet.length > 0) {
                     await Wallets.bulkWrite(bulkWallet);
                 }
-        
+
                 console.log('carnivalCorporateToken DONE');
                 return true;
             } catch (error) {
                 throw new Error(error.message);
             }
         }
-        
+
 
         // This will calculate daily once at 12:01 am but distributed on monthly basis
         async function carnivalRoyaltyBonus() {
             try {
                 // Fetch all staking first
                 console.log("inside carnival royalty bonus function")
-                let staking = await Staking.find({status: 'RUNNING'});
+                let staking = await Staking.find({ status: 'RUNNING' });
 
                 const bulkTransactions = [];
                 const bulkWallet = [];
 
                 // Fetch the user to get the activation_date
-                let user = await User.findOne({ user_id : "CARN919175"});
+                let user = await User.findOne({ user_id: "CARN919175" });
                 // console.log("user:", user);
                 if (!user || !user.activation_date) {
                     console.log(`User with id CARN919175 does not have an activation_date`);
@@ -519,18 +524,18 @@ process.on('message', async(message) => {
                 for await (const user of users) {
                     // for every user we have to check their staking
                     // find last transaction
-                    let last = await Transaction.findOne({$and: [{user_id: user.user_id}, {transaction_type: 'CARNIVAL RANK REWARD'}]}).sort({createdAt: -1}).lean()
-                    let staking = await Staking.find({$and: [{user_id: user.user_id}, {status: 'RUNNING'}]})
+                    let last = await Transaction.findOne({ $and: [{ user_id: user.user_id }, { transaction_type: 'CARNIVAL RANK REWARD' }] }).sort({ createdAt: -1 }).lean()
+                    let staking = await Staking.find({ $and: [{ user_id: user.user_id }, { status: 'RUNNING' }] })
                     let selfbusiness = staking.length > 0 ? staking.reduce((sum, staking) => sum + staking.amount, 0) : 0
-                    let directCount = await Referral.countDocuments({sponser_id: user._id})
-                    
+                    let directCount = await Referral.countDocuments({ sponser_id: user._id })
+
                     // console.log(selfbusiness, " : selfbusiness")
 
                     // now we have to check team business for this particular user;
                     let team = await ReferralController.getDownlineTeam3(user._id, user.last_rank_achieve)
                     // console.log(team, " : team : ")
-                    if(team.length > 0) {
-                        team.sort((a,b) => b.stakingAmount - a.stakingAmount)
+                    if (team.length > 0) {
+                        team.sort((a, b) => b.stakingAmount - a.stakingAmount)
                         // console.log(team)
                         let [first, second, ...rest] = team
                         let first_business = first?.stakingAmount === undefined ? 0 : first?.stakingAmount;
@@ -538,7 +543,7 @@ process.on('message', async(message) => {
                         let second_business = second?.stakingAmount === undefined ? 0 : second?.stakingAmount;
 
                         let rest_business = rest.reduce((sum, staking) => sum + staking.stakingAmount, 0)
-                        let total_business = (first_business+second_business+rest_business)-user.carry_forward_business
+                        let total_business = (first_business + second_business + rest_business) - user.carry_forward_business
                         // console.log(user.user_id, " : user.user_id ",selfbusiness, " : selfbusiness ",first_business, " : first_business :", rest_business, " : rest_business ", second_business, " : second_business ", total_business , " : total_business")
                         let obj = {
                             user_id: user.user_id,
@@ -551,22 +556,22 @@ process.on('message', async(message) => {
                         }
                         console.log(obj)
 
-                        if(selfbusiness >= (total_business * 25/100)) {
+                        if (selfbusiness >= (total_business * 25 / 100)) {
                             let ranks = Object.keys(user.ranks)
                             for await (const rank of ranks) {
-                                let qualify1 = user.ranks[`${rank}`].team_business * 30 /100;
-                                let qualify2 = user.ranks[`${rank}`].team_business * 40 /100;
+                                let qualify1 = user.ranks[`${rank}`].team_business * 30 / 100;
+                                let qualify2 = user.ranks[`${rank}`].team_business * 40 / 100;
                                 // let required_business = user.ranks[`${rank}`].team_business
                                 let status = user.ranks[`${rank}`].rank_status
                                 let direct_required = user.ranks[`${rank}`].direct_required
                                 let required_business = user.ranks[`${rank}`].team_business;
                                 let carryForward = total_business > user.ranks[`${rank}`].team_business ? total_business - user.ranks[`${rank}`].team_business : 0
                                 let rank_path = `ranks.${rank}.rank_status`
-                                
-                                if(directCount >= direct_required && status === 'PENDING' && total_business >= required_business) {
+
+                                if (directCount >= direct_required && status === 'PENDING' && total_business >= required_business) {
                                     console.log(rank_path, " : rank_path")
                                     await Users.updateOne(
-                                        {user_id: user.user_id},
+                                        { user_id: user.user_id },
                                         {
                                             $set: {
                                                 current_rank: rank,
@@ -615,7 +620,7 @@ process.on('message', async(message) => {
                         }
                     }
                     await Users.updateOne(
-                        {user_id: user.user_id},
+                        { user_id: user.user_id },
                         {
                             $set: {
                                 last_rank_achieve: new Date(),
@@ -640,9 +645,8 @@ process.on('message', async(message) => {
         };
 
         // Schedule the cron job
-        cron.schedule('1 0 * * *', () => {
+        cron.schedule('24 11 * * *', () => {
             console.log('Starting....');
-            
             task();
         }, {
             scheduled: true,
@@ -650,8 +654,8 @@ process.on('message', async(message) => {
         });
 
 
-        myEmitter.on('distribute', async() => {
-            await superBonus();
+        myEmitter.on('distribute', async () => {
+            // await superBonus();
             // await carnivalRoyaltyBonus();
             // await carnivalCorporateToken();
             // await carnivalRankRewards();
@@ -662,7 +666,7 @@ process.on('message', async(message) => {
     }
 })
 
-process.on('disconnect', async() => {
+process.on('disconnect', async () => {
     console.log('Child process is disconnected. Exiting...');
     process.stdin.pause();
     process.kill(process.pid);

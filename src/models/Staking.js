@@ -4,18 +4,21 @@ const stakingSchema = mongoose.Schema(
     {
         user_id: { type: String, requird: true },
         id: { type: String, required: true },
+        total: { type: Number, required: false, default: 0 }, // 2x, 3x of amount (2x: roi income, 1x: other incomes)
+        currency: { type: String, required: true, default: 'USDT' },
+        sng_price: { type: Number, required: true, default: 1 },
         amount: { type: Number, required: true },
-        currency: { type: String, required: false, default: 'USDT' },
-        paid: { type: Number, required: false, default: 0},
-        // cctpaid: { type: Number, required: false, default: 0},
-        total: { type: Number, required: false, default: 0},
-        chain: { type: String, required: false, default: 'BEP20'},
-        status: { type: String, required: true, default: 'RUNNING'},
+        reward_percentage: { type: Number, required: true, default: 10 },
+        eqv_sng: { type: Number, required: true, default: function () { return this.amount + ((this.reward_percentage / 100) * this.amount) } },
+        paid: { type: Number, required: true, default: 0 },
+        roi_paid: { type: Number, required: true, default: 0 },
+        total_roi: { type: Number, required: true, default: function () { return this.amount * 2 } }, // 2x of amount (Both Cases...)
+        chain: { type: String, required: false, default: 'BEP20' },
+        status: { type: String, required: true, default: 'RUNNING' },
         roi: { type: Number, required: true },
-        // phase: { type: String, required: true },
-        deduct_amount: { type: Number, required: false, default : 0 },
-        type: {type : String, required: false, enum : ['USER_STAKING', 'ADMIN_STAKING', 'ADMIN_DEDUCT_STAKING'], default : 'USER_STAKING'},
-
+        booster_applicable: { type: Boolean, required: true, default: false },
+        deduct_amount: { type: Number, required: false, default: 0 },
+        type: { type: String, required: false, enum: ['USER_STAKING', 'ADMIN_STAKING', 'ADMIN_DEDUCT_STAKING'], default: 'USER_STAKING' },
     },
     {
         timestamps: true,
