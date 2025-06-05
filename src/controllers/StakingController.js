@@ -22,7 +22,6 @@ module.exports = {
             let user = await Users.findOne({ user_id: user_id });
             if (userbalance === null || userbalance.usdt_balance < amount) return res.status(406).json({ success: false, message: 'Insufficient Wallet Balance', data: [] })
 
-
             // deduct balance from users wallet
             let deduct = await Wallet.updateOne(
                 { user_id: user_id },
