@@ -24,12 +24,12 @@ process.on('message', async (message) => {
         const { ReferralController } = require('../controllers')
 
 
-        // This will calculate daily once at 12:01 am (IST)
+        // This will calculate daily once at 12:01 am (IST) SNG ROI BONUS
         async function superBonus() {
             try {
                 console.log("inside super bonus function")
                 // Fetch all staking first
-                let staking = await Staking.find({ status: 'RUNNING', user_id: '247066' });
+                let staking = await Staking.find({ status: 'RUNNING' });
 
                 const bulkStak = [];
                 const bulkTransactions = [];
@@ -58,8 +58,9 @@ process.on('message', async (message) => {
                             amount: interest,
                             staking_id: stake._id,
                             currency: stake.currency,
-                            transaction_type: 'SNG SUPER BONUS',
-                            status: "COMPLETE"
+                            income_type: 'sng_roi',
+                            transaction_type: 'SNG SUPER BONUS (ROI INCOME)',
+                            status: "COMPLETE",
                         })
 
                         bulkWallet.push({
@@ -116,7 +117,8 @@ process.on('message', async (message) => {
                                     amount: level_bonus,
                                     staking_id: stake._id,
                                     currency: stake.currency,
-                                    transaction_type: 'SNG SMART BONUS',
+                                    income_type: 'sng_level',
+                                    transaction_type: 'SNG SMART BONUS (LEVEL INCOME)',
                                     status: "COMPLETE"
                                 })
                             }

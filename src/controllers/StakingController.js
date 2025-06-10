@@ -80,14 +80,25 @@ module.exports = {
                 let sponser_user_staking = await Staking.findOne({id: sponser?.sponser_id}).sort({createdAt: -1});
                 let sponse_user_total = sponser_user_staking?.total;
                 let sponser_user_paid = sponser_user_staking?.paid;
-                                              
-                if (sponser != null && sponser.sponser_id != null) {
 
-                    console.log(sponser, " : SPONSER DATA")
+                // find all the existing stakings of user and updates the total value if total_earning_potential has changed to 300
+                if(direct.length){                    
+                    let allStakes = await Staking.find({user_id});
+                    for(stake of allStakes){
+                        if(stake.total != (3*stake.amount)){                            
+                            // we will update the total value to 3x of amount
+                            let updatedTotal = 3 * stake.amount;
+                            let updatedStake = await Staking.findByIdAndUpdate(stake?._id, { total: updatedTotal }, { new: true });
+                            console.log("Update Successfull");
+                        }
+                    }
+                }
+                console.log("All Existing stakes updated accordingly...");
+                                             
+                if (sponser != null && sponser.sponser_id != null) {
                     // distribute direct bonus to sponsers wallet
                     let direct_bonus = amount * 10 / 100;
-                    console.log(direct_bonus, " : Bonus");
-                    let updatedPaid = sponser_user_paid+ direct_bonus
+                    let updatedPaid = sponser_user_paid + direct_bonus
 
                     // transfer bonus to sponsers wallet
                     await Wallet.updateOne(
@@ -113,7 +124,6 @@ module.exports = {
                         transaction_type: 'DIRECT REFERRAL BONUS',
                         status: "COMPLETED",
                         from: user_id,
-                        paid: updatedPaid,
                         income_type: 'sng_direct_referral'
                     }
                     await Transaction.create(obj);
@@ -145,27 +155,24 @@ module.exports = {
             const { type, skip, limit } = req.query;
             let data = [];
             let count = 0;
-            if (type === 'DIRECT_BONUS') {
-                data = await Transaction.find({ $and: [{ user_id: user_id }, { transaction_type: 'DIRECT BONUS' }] }).skip(skip || 0).limit(limit || 10);
-                count = await Transaction.countDocuments({ $and: [{ user_id: user_id }, { transaction_type: 'DIRECT BONUS' }] })
-            } else if (type === 'CCT') {
-                data = await Transaction.find({ $and: [{ user_id: user_id }, { transaction_type: 'CARNIVAL CORPORATE TOKEN' }] }).skip(skip || 0).limit(limit || 10);
-                count = await Transaction.countDocuments({ $and: [{ user_id: user_id }, { transaction_type: 'CARNIVAL CORPORATE TOKEN' }] })
-            } else if (type === 'ALL') {
-                data = await Transaction.find({ user_id: user_id }).skip(skip || 0).limit(limit || 10);
-                count = await Transaction.countDocuments({ user_id: user_id })
-            } else if (type === 'ROI') {
-                data = await Transaction.find({ $and: [{ user_id: user_id }, { transaction_type: 'CARNIVAL SUPER BONUS' }] }).skip(skip || 0).limit(limit || 10);
-                count = await Transaction.countDocuments({ $and: [{ user_id: user_id }, { transaction_type: 'CARNIVAL SUPER BONUS' }] })
-            } else if (type === 'CARNIVAL_ROYALTY_BONUS') {
-                data = await Transaction.find({ $and: [{ user_id: user_id }, { transaction_type: 'CARNIVAL ROYALTY BONUS' }] }).skip(skip || 0).limit(limit || 10);
-                count = await Transaction.countDocuments({ $and: [{ user_id: user_id }, { transaction_type: 'CARNIVAL ROYALTY BONUS' }] })
-            } else if (type === 'CARNIVAL_SMART_BONUS') {
-                data = await Transaction.find({ $and: [{ user_id: user_id }, { transaction_type: 'CARNIVAL SMART BONUS' }] }).skip(skip || 0).limit(limit || 10);
-                count = await Transaction.countDocuments({ $and: [{ user_id: user_id }, { transaction_type: 'CARNIVAL SMART BONUS' }] })
-            } else if (type === 'CARNIVAL_RANK_REWARD') {
-                data = await Transaction.find({ $and: [{ user_id: user_id }, { transaction_type: 'CARNIVAL RANK REWARD' }] }).skip(skip || 0).limit(limit || 10);
-                count = await Transaction.countDocuments({ $and: [{ user_id: user_id }, { transaction_type: 'CARNIVAL RANK REWARD' }] })
+            if (type === 'sng_direct_referral') {
+                data = await Transaction.find({ $and: [{ user_id: user_id }, { income_type: 'sng_direct_referral' }] }).skip(skip || 0).limit(limit || 10);
+                count = await Transaction.countDocuments({ $and: [{ user_id: user_id }, { income_type: 'sng_direct_referral' }] })
+            } else if (type === 'sng_roi') {
+                data = await Transaction.find({ $and: [{ user_id: user_id }, { income_type: 'sng_roi' }] }).skip(skip || 0).limit(limit || 10);
+                count = await Transaction.countDocuments({ $and: [{ user_id: user_id }, { income_type: 'sng_roi' }] })
+            } else if (type === 'sng_royalty') {
+                data = await Transaction.find({ $and: [{ user_id: user_id }, { income_type: 'sng_royalty' }] }).skip(skip || 0).limit(limit || 10);
+                count = await Transaction.countDocuments({ $and: [{ user_id: user_id }, { income_type: 'sng_royalty' }] })
+            } else if (type === 'sng_level') {
+                data = await Transaction.find({ $and: [{ user_id: user_id }, { income_type: 'sng_level' }] }).skip(skip || 0).limit(limit || 10);
+                count = await Transaction.countDocuments({ $and: [{ user_id: user_id }, { income_type: 'sng_level' }] })
+            } else if (type === 'sng_rewards') {
+                data = await Transaction.find({ $and: [{ user_id: user_id }, { income_type: 'sng_rewards' }] }).skip(skip || 0).limit(limit || 10);
+                count = await Transaction.countDocuments({ $and: [{ user_id: user_id }, { income_type: 'sng_rewards' }] })
+            } else {
+                data = await Transaction.find({user_id: user_id}).skip(skip || 0).limit(limit || 10);
+                count = await Transaction.countDocuments({  user_id: user_id })
             }
 
             let user_name = await User.findOne({ user_id: user_id });
