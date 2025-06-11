@@ -85,10 +85,7 @@ process.on('message', async (message) => {
 
                                 let level_bonus;
                                 if (up.level == 1 && direct_count >= 1) {
-                                    console.log("hi samyak...",);
                                     level_bonus = interest * 10 / 100;
-                                    console.log("Level 1 Bonus:", level_bonus);
-
                                 } else if (up.level == 2 && direct_count >= 2) {
                                     level_bonus = interest * 8 / 100;
                                 } else if (up.level == 3 && direct_count >= 3) {
@@ -106,7 +103,6 @@ process.on('message', async (message) => {
                                 } else {
                                     console.log("Skipping Level :", up.level)
                                 }
-                                console.log('1111', level_bonus);
 
                                 if (level_bonus !== undefined) {
 
@@ -116,7 +112,6 @@ process.on('message', async (message) => {
                                             update: { $inc: { usdt_balance: level_bonus } }
                                         }
                                     })
-                                    console.log('2222');
 
                                     bulkTransactions.push({
                                         user_id: up.user_id,
@@ -128,7 +123,6 @@ process.on('message', async (message) => {
                                         transaction_type: 'SNG SMART BONUS (LEVEL INCOME)',
                                         status: "COMPLETE"
                                     })
-                                    console.log('3333');
                                 }
                             }
                         }
@@ -143,28 +137,16 @@ process.on('message', async (message) => {
                         })
                     }
                 }
-                console.log(bulkStak.length, "Bulk Stack is...");
-                console.log(bulkTransactions.length, "Bulk Transactions is...");
-                console.log(bulkWallet.length, "Bulk Wallets is...");
-
 
                 // Execute bulk operations
-                if (bulkStak.length > 0) {
-                    await Staking.bulkWrite(bulkStak);
-                }
-                console.log('4444');
+                if (bulkStak.length > 0) await Staking.bulkWrite(bulkStak);
 
                 // Insert transactions in bulk
-                if (bulkTransactions.length > 0) {
-                    await Transaction.insertMany(bulkTransactions);
-                }
-                console.log('5555');
+                if (bulkTransactions.length > 0) await Transaction.insertMany(bulkTransactions);
 
+                if (bulkWallet.length > 0) await Wallets.bulkWrite(bulkWallet)
 
-                if (bulkWallet.length > 0) {
-                    await Wallets.bulkWrite(bulkWallet)
-                }
-                console.log('superBonus DONE')
+                console.log('SuperBonus Done...');
                 return true;
             } catch (error) {
                 throw new Error(error, ": Error");
