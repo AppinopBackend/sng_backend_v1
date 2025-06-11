@@ -65,17 +65,11 @@ const directReferred = async (req, res) => {
     try {
         const { id, index } = req.query;
         const members = await Referral.find({ sponser_id: id });
-        console.log(members, "Memmbers...");
-
         const userIds = members.map(member => member.user_id);
-        console.log(userIds, "User IDs");
-
         const userCodes = members.map(member => member.user_code);
-        console.log(userCodes, "User Codesss");
 
         const users = await Users.find({ _id: { $in: userIds } }, { password: 0, ranks: 0 }).lean();
         const stacking_details = await Staking.find({ user_id: { $in: userCodes } });
-        console.log(stacking_details, "Details of staking....");
 
         // Create a map to hold the running staking package count for each user
         const runningStakingCounts = {};
@@ -89,8 +83,6 @@ const directReferred = async (req, res) => {
         // Map users with additional data including staking amount
         const data = users.map(user => {
             const userStackingDetails = stacking_details.find(detail => detail.user_id === user.user_id);
-            console.log(userStackingDetails, "User Staking details.....");
-
             return {
                 ...user,
                 id: user._id,
