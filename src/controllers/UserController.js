@@ -689,7 +689,7 @@ module.exports = {
             return res.status(200).json({
                 success: true,
                 message: message,
-                data: response_data[0]
+                data: response_data
             });
         } catch (error) {
             return res.status(500).json({
