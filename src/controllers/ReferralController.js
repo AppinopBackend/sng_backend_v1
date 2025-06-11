@@ -2,51 +2,124 @@ const Referral = require('../models/Referral');
 const Users = require('../models/User');
 const Staking = require('../models/Staking')
 
-module.exports = {
-    directReferred: async (req, res) => {
-        try {
-            const { id, index } = req.query;
-            const members = await Referral.find({ sponser_id: id });
-            const userIds = members.map(member => member.user_id);
-            const userCodes = members.map(member => member.user_code);
-            const users = await Users.find({ _id: { $in: userIds } }, { password: 0, ranks: 0 }).lean();
-            const stacking_details = await Staking.find({ user_id: { $in: userCodes } });
 
-            // Create a map to hold the running staking package count for each user
-            const runningStakingCounts = {};
 
-            for await (const userId of userIds) {
-                const runningStakingPackages = await Staking.find({ user_id: userId, status: 'RUNNING' });
-                runningStakingCounts[userId] = runningStakingPackages.length;
+const getDownlineTeam2 = async (id) => {
+    try {
+        let team = [{ userId: id, level: 0 }];
+        let allMembers = [];
+
+        while (team.length > 0) {
+            const current = team.shift();
+            const direct = await Referral.find({ sponser_id: current.userId }).lean();
+
+            if (direct.length > 0) {
+                const levelMembers = direct.map(member => ({
+                    userId: member.user_id,
+                    level: current.level + 1
+                }));
+
+                team.push(...levelMembers);
+                allMembers.push(...levelMembers);
             }
-
-            // Map users with additional data including staking amount
-            const data = users.map(user => {
-                const userStackingDetails = stacking_details.find(detail => detail.user_id === user.user_id);
-                return {
-                    ...user,
-                    id: user._id,
-                    sponser_id: id,
-                    index: index,
-                    staking_status: user.staking_status || 'INACTIVE',
-                    self_business: runningStakingCounts[user._id] || 0,
-                    self_stacking_amount: userStackingDetails ? userStackingDetails.amount : 0
-                };
-            });
-
-            return res.status(200).json({
-                success: true,
-                message: 'Direct referred fetched!!',
-                data: data
-            });
-        } catch (error) {
-            return res.status(500).json({
-                success: false,
-                message: error.message,
-                data: []
-            });
         }
-    },
+
+        // Create a lookup object to associate user IDs with their levels
+        const memberLevels = allMembers.reduce((acc, member) => {
+            acc[member.userId] = member.level;
+            return acc;
+        }, {});
+
+        // Fetch user details and include their levels in the response
+        let details = await Users.find({ _id: { $in: Object.keys(memberLevels) } }, { password: 0 }).lean();
+        details = details.map(user => ({
+            ...user,
+            level: memberLevels[user._id]
+        }));
+        console.log(memberLevels)
+        let business = await Staking.aggregate([
+            {
+                $match: {
+                    $and: [
+                        { id: { $in: Object.keys(memberLevels) } },
+                        { status: "RUNNING" }
+                    ]
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalStackQuantity: { $sum: "$amount" }
+                }
+            }
+        ]);
+        let total = business.length > 0 ? business[0].totalStackQuantity : 0;
+        console.log(total)
+        return total;
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message, data: [] });
+    }
+};
+
+const directReferred = async (req, res) => {
+    try {
+        const { id, index } = req.query;
+        const members = await Referral.find({ sponser_id: id });
+        console.log(members, "Memmbers...");
+
+        const userIds = members.map(member => member.user_id);
+        console.log(userIds, "User IDs");
+
+        const userCodes = members.map(member => member.user_code);
+        console.log(userCodes, "User Codesss");
+
+        const users = await Users.find({ _id: { $in: userIds } }, { password: 0, ranks: 0 }).lean();
+        const stacking_details = await Staking.find({ user_id: { $in: userCodes } });
+        console.log(stacking_details, "Details of staking....");
+
+        // Create a map to hold the running staking package count for each user
+        const runningStakingCounts = {};
+        const selfBusinessMap = {};
+
+        for await (const userId of userIds) {
+            const selfBusiness = await getDownlineTeam2(userId);
+            selfBusinessMap[userId] = selfBusiness;
+        }
+
+        // Map users with additional data including staking amount
+        const data = users.map(user => {
+            const userStackingDetails = stacking_details.find(detail => detail.user_id === user.user_id);
+            console.log(userStackingDetails, "User Staking details.....");
+
+            return {
+                ...user,
+                id: user._id,
+                sponser_id: id,
+                index: index,
+                staking_status: user.staking_status || 'INACTIVE',
+                // self_business: runningStakingCounts[user._id] || 0,
+                self_business: selfBusinessMap[user._id] || 0,
+                // self_stacking_amount: userStackingDetails ? userStackingDetails.amount : 0
+            };
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Direct referred fetched!!',
+            data: data
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: error.message,
+            data: []
+        });
+    }
+};
+
+
+module.exports = {
+    directReferred, getDownlineTeam2,
 
     getDownlineTeam: async (req, res) => {
         try {
