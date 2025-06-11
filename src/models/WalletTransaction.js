@@ -5,6 +5,7 @@ const transactionSchema = mongoose.Schema(
         user_id: { type: String, requird: true },
         id: { type: String, required: true },
         amount: { type: Number, required: true },
+        finalAmount: { type: Number, required: true },
         currency: { type: String, required: false, default: 'USDT' },
         chain: { type: String, required: false, default: 'BEP20'},
         transaction_hash: { type: String, required: false, default: '' },

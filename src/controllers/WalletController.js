@@ -129,7 +129,7 @@ module.exports = {
                 { user_id: user_id },
                 {
                     $inc: {
-                        sng_balance: -amount
+                        sng_balance: -finalAmount
                     }
                 }
             )
@@ -142,6 +142,7 @@ module.exports = {
             user_id: user_id,
             id: id,
             amount: amount,
+            finalAmount: finalAmount,
             currency: currency,
             chain: chain,
             withdrawal_address: withdrawal_address,
