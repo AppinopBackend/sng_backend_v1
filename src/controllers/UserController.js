@@ -267,20 +267,22 @@ module.exports = {
 
             // Available balance
             let balance = await Wallet.findOne({ user_id: user_id });
-            data.balance = balance === null ? 0 : balance.balance;
-            data.cct_balance = balance === null ? 0 : balance.cct_balance;
+            data.balance = balance === null ? 0 : balance.usdt_balance;
+            // data.cct_balance = balance === null ? 0 : balance.cct_balance;
 
             // Total team business
             let team = await ReferralController.getDownlineTeam2(id);
             data.team_business = team;
 
-            // Carnival Super Bonus/ Corporate Bonus USDT
+            // from here...
+
+            // SNG ROI Income
             let bonus = await Transaction.aggregate([
                 {
                     $match: {
                         $and: [
                             { user_id: user_id },
-                            { transaction_type: 'CARNIVAL SUPER BONUS' }
+                            { income_type: 'sng_roi' }
                         ]
                     }
                 },
@@ -293,13 +295,13 @@ module.exports = {
             ]);
             data.super_bonus = bonus.length > 0 ? bonus[0].totalAmount : 0
 
-            // Carnival Direct Bonus
+            // SNG Direct Referral Income
             let bonus2 = await Transaction.aggregate([
                 {
                     $match: {
                         $and: [
                             { user_id: user_id },
-                            { transaction_type: 'DIRECT BONUS' }
+                            { income_type: 'sng_direct_referral' }
                         ]
                     }
                 },
@@ -312,13 +314,13 @@ module.exports = {
             ]);
             data.direct_bonus = bonus2.length > 0 ? bonus2[0].totalAmount : 0
 
-            // Carnival Smart Bonus
+            // SNG Level Income
             let bonus3 = await Transaction.aggregate([
                 {
                     $match: {
                         $and: [
                             { user_id: user_id },
-                            { transaction_type: 'CARNIVAL SMART BONUS' }
+                            { income_type: 'sng_level' },
                         ]
                     }
                 },
@@ -337,7 +339,7 @@ module.exports = {
                     $match: {
                         $and: [
                             { user_id: user_id },
-                            { transaction_type: 'CARNIVAL ROYALTY BONUS' }
+                            { income_type: 'sng_royalty' }
                         ]
                     }
                 },
@@ -683,7 +685,7 @@ module.exports = {
             console.log(sender_transactions, ": sender_transactions");
             console.log(receiver_transactions, ": receiver_transactions");
             console.log("Hello", response_data, ": response data log");
-            
+
             return res.status(200).json({
                 success: true,
                 message: message,
