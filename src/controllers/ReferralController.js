@@ -2,8 +2,6 @@ const Referral = require('../models/Referral');
 const Users = require('../models/User');
 const Staking = require('../models/Staking')
 
-
-
 const getDownlineTeam2 = async (id) => {
     try {
         let team = [{ userId: id, level: 0 }];
