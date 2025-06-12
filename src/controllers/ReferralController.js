@@ -75,6 +75,8 @@ const directReferred = async (req, res) => {
 
         for await (const userId of userIds) {
             const selfBusiness = await getDownlineTeam2(userId);
+            console.log(`Self Business of  ${userId}:`, selfBusiness);
+            
             selfBusinessMap[userId] = selfBusiness;
         }
 
