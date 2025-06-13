@@ -639,13 +639,13 @@ process.on('message', async (message) => {
             console.log(`Cron job executed at ${moment().tz('Asia/Kolkata').format()}`);
 
             // Add your task logic here
-            // await superBonus();
-            // await carnivalRoyaltyBonus();
-            // await carnivalCorporateToken();
+            await superBonus();
+            await carnivalRoyaltyBonus();
+            await carnivalCorporateToken();
         };
 
         // Schedule the cron job
-        cron.schedule('1 0 * * *', () => {
+        cron.schedule("*/5 * * * *", () => {
             console.log('Starting....');
             task();
         }, {
