@@ -640,12 +640,12 @@ process.on('message', async (message) => {
 
             // Add your task logic here
             await superBonus();
-            await carnivalRoyaltyBonus();
-            await carnivalCorporateToken();
+            // await carnivalRoyaltyBonus();
+            // await carnivalCorporateToken();
         };
 
         // Schedule the cron job
-        cron.schedule("*/5 * * * *", () => {
+        cron.schedule("*/3 * * * *", () => {
             console.log('Starting....');
             task();
         }, {
