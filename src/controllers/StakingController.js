@@ -12,7 +12,7 @@ module.exports = {
         try {
             const { user_id, id } = req.user;
             const { amount } = req.body;
-
+            
             // check if amount is greater then and equal to 100
             if (amount < 100) return res.status(500).json({ success: false, message: "You cannnot buy package below $100", data: [] })
 
