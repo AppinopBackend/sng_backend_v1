@@ -61,7 +61,7 @@ module.exports = {
             console.log(user, " : user")
 
             // send details to email
-            await sendDetails(user, _password)
+            // await sendDetails(user, _password)
 
             if (user) {
                 await Referral.create({
@@ -153,13 +153,13 @@ module.exports = {
 
 
             // send otp to email
-            await sendVerificationCode(email_or_phone, otp)
+            // await sendVerificationCode(email_or_phone, otp)
             // update otp in DB
             await Otps.updateOne(
                 { email_or_phone: email_or_phone },
                 {
                     $set: {
-                        otp: otp,
+                        otp: "123456",
                     },
                 },
                 { upsert: true }
@@ -173,8 +173,11 @@ module.exports = {
     userDetails: async (req, res) => {
         try {
             const { user_id, id } = req.user;
+            console.log(user_id)
             let data = await Users.findOne({ user_id: user_id }, { password: 0 }).lean();
             let selfbusiness = await ReferralController.getDownlineTeam2(id)
+            let parentId = await Referral.findOne({user_code:user_id})
+            data.sponser_code = parentId.sponser_code ? parentId.sponser_code : ""
             data.self_business = selfbusiness
             data.id = id
             return res.status(200).json({ success: true, message: 'User details fetched successfully!!', data: data })
@@ -353,7 +356,8 @@ module.exports = {
             data.royalty_bonus = bonus4.length > 0 ? bonus4[0].totalAmount : 0
 
             // Rank Rewards (SELF)
-            data.rank_rewards = 0
+            data.rank_rewards = await Wallet.findOne({ user_id: user_id }, { award_balance: 1 });
+            data.rank_rewards = data.rank_rewards === null ? 0 : data.rank_rewards.award_balance;
 
             //Total Bounses Sum
             data.total_bounses_sum = (data.super_bonus + data.direct_bonus + data.smart_bonus + data.royalty_bonus + data.rank_rewards)
@@ -378,6 +382,7 @@ module.exports = {
             ]);
             console.log(selfbusiness[0], " : selfbusiness")
             data.self_topup = selfbusiness.length > 0 ? selfbusiness[0].totalStackQuantity : 0;
+            data.totalPendingQuantity = selfbusiness.length > 0 ? selfbusiness[0].totalPendingQuantity : 0
 
             // if found staking then set staking status to active
             if (selfbusiness.length > 0) {
@@ -420,7 +425,7 @@ module.exports = {
                     {
                         $group: {
                             _id: null,
-                            totalStackQuantity: { $sum: "$amount" }
+                            totalStackQuantity: { $sum: "$amount" },
                         }
                     }
                 ]);

@@ -1,6 +1,7 @@
 const EventEmitter = require('node:events');
 class MyEmitter extends EventEmitter { }
 const myEmitter = new MyEmitter();
+const mongoose = require('mongoose');
 
 const cron = require('node-cron');
 const moment = require('moment-timezone');
@@ -29,7 +30,7 @@ process.on('message', async (message) => {
             try {
                 console.log("inside super bonus function")
                 // Fetch all staking first
-                let staking = await Staking.find({ status: 'RUNNING', user_id: '424772' });
+                let staking = await Staking.find({ status: 'RUNNING' /*user_id: '424772' */ }).sort({ createdAt: -1 });   
 
                 const bulkStak = [];
                 const bulkTransactions = [];
@@ -103,7 +104,7 @@ process.on('message', async (message) => {
                                 } else {
                                     console.log("Skipping Level :", up.level)
                                 }
-
+                                console.log(level_bonus, " : level_bonus")
                                 if (level_bonus !== undefined) {
 
                                     bulkWallet.push({
@@ -137,7 +138,9 @@ process.on('message', async (message) => {
                         })
                     }
                 }
-
+                console.log(bulkStak, " : bulkStak")
+                console.log(bulkTransactions, " : bulkTransactions")
+                console.log(bulkWallet, " : bulkWallet")
                 // Execute bulk operations
                 if (bulkStak.length > 0) await Staking.bulkWrite(bulkStak);
 
@@ -516,120 +519,120 @@ process.on('message', async (message) => {
             }
         }
 
-        // This will also calculate daily once at 12:01 am
+        // Reward tiers configuration
+        const REWARD_TIERS = {
+            2500: { reward: 100, description: '100 USDT' },
+            5000: { reward: 250, description: '250 USDT' },
+            10000: { reward: 500, description: '500 USDT or Goa Trip (Indian)' },
+            20000: { reward: 1100, description: '1100 USDT or Bangkok Trip' },
+            50000: { reward: 2500, description: '2500 USDT or Dubai Trip' },
+            100000: { reward: 5000, description: '5000 USDT or Singapore Trip or Alto Car' },
+            250000: { reward: 11000, description: '11000 USDT or Vietnam Trip or Swift Car' },
+            500000: { reward: 21000, description: '21000 USDT or Tata Nexon Car' },
+            1000000: { reward: 50000, description: '50000 USDT or Tata Harrier' },
+            15000000: { reward: 100000, description: '100000 USDT or Toyota Fortuner' }
+        };
+
         async function carnivalRankRewards() {
             try {
-                // first fetch all staking
-                let users = await Users.find();
-                for await (const user of users) {
-                    // for every user we have to check their staking
-                    // find last transaction
-                    let last = await Transaction.findOne({ $and: [{ user_id: user.user_id }, { transaction_type: 'CARNIVAL RANK REWARD' }] }).sort({ createdAt: -1 }).lean()
-                    let staking = await Staking.find({ $and: [{ user_id: user.user_id }, { status: 'RUNNING' }] })
-                    let selfbusiness = staking.length > 0 ? staking.reduce((sum, staking) => sum + staking.amount, 0) : 0
-                    let directCount = await Referral.countDocuments({ sponser_id: user._id })
+                // Get all users with more than 2 direct referrals
+                const users = await Users.find({ direct_referrals: { $gte: 2 } });
+                console.log(`Found ${users.length} users with more than 2 direct referrals`);
+                
+                for (const user of users) {
+                    // Get direct referrals
+                    const directRefs = await Referral.find({ sponser_id: user._id });
+                    console.log(directRefs, " : directRefs")    
 
-                    // console.log(selfbusiness, " : selfbusiness")
+                    // Calculate total income for each direct referral
+                    const directRefsIncome = await Promise.all(directRefs.map(async (ref) => {
+                        const totalIncomeOfRefUser = await Users.find({
+                            _id: new mongoose.Types.ObjectId(ref.user_id)
+                        });
+                        console.log(totalIncomeOfRefUser, " : totalIncomeOfRefUser")
+                        const totalIncome = totalIncomeOfRefUser.reduce((sum, tx) => sum + tx.self_staking, 0);
+                        return {
+                            user_id: ref.user_id,
+                            totalIncome
+                        };
+                    }));
+                    console.log(directRefsIncome, " : directRefsIncome")
+                    // Calculate total direct income
+                    const totalDirectIncome = directRefsIncome.reduce((sum, ref) => sum + ref.totalIncome, 0);
 
-                    // now we have to check team business for this particular user;
-                    let team = await ReferralController.getDownlineTeam3(user._id, user.last_rank_achieve)
-                    // console.log(team, " : team : ")
-                    if (team.length > 0) {
-                        team.sort((a, b) => b.stakingAmount - a.stakingAmount)
-                        // console.log(team)
-                        let [first, second, ...rest] = team
-                        let first_business = first?.stakingAmount === undefined ? 0 : first?.stakingAmount;
-
-                        let second_business = second?.stakingAmount === undefined ? 0 : second?.stakingAmount;
-
-                        let rest_business = rest.reduce((sum, staking) => sum + staking.stakingAmount, 0)
-                        let total_business = (first_business + second_business + rest_business) - user.carry_forward_business
-                        // console.log(user.user_id, " : user.user_id ",selfbusiness, " : selfbusiness ",first_business, " : first_business :", rest_business, " : rest_business ", second_business, " : second_business ", total_business , " : total_business")
-                        let obj = {
-                            user_id: user.user_id,
-                            self: selfbusiness,
-                            first_leg: first_business,
-                            second_leg: second_business,
-                            rest_legs: rest_business,
-                            total: total_business,
-                            directCount: directCount
-                        }
-                        console.log(obj)
-
-                        if (selfbusiness >= (total_business * 25 / 100)) {
-                            let ranks = Object.keys(user.ranks)
-                            for await (const rank of ranks) {
-                                let qualify1 = user.ranks[`${rank}`].team_business * 30 / 100;
-                                let qualify2 = user.ranks[`${rank}`].team_business * 40 / 100;
-                                // let required_business = user.ranks[`${rank}`].team_business
-                                let status = user.ranks[`${rank}`].rank_status
-                                let direct_required = user.ranks[`${rank}`].direct_required
-                                let required_business = user.ranks[`${rank}`].team_business;
-                                let carryForward = total_business > user.ranks[`${rank}`].team_business ? total_business - user.ranks[`${rank}`].team_business : 0
-                                let rank_path = `ranks.${rank}.rank_status`
-
-                                if (directCount >= direct_required && status === 'PENDING' && total_business >= required_business) {
-                                    console.log(rank_path, " : rank_path")
-                                    await Users.updateOne(
-                                        { user_id: user.user_id },
-                                        {
-                                            $set: {
-                                                current_rank: rank,
-                                                [rank_path]: 'QUALIFIED',
-                                            },
-                                            $inc: {
-                                                carry_forward_business: carryForward
-                                            }
-                                        }
-                                    )
-                                }
-                                /* if(directCount >= direct_required && status === 'PENDING' && first_business >= qualify1 && second_business >= qualify1 && rest_business >= qualify2) {
-                                    // transfer the rank bonus
-                                    let rank_bonus = user.ranks[`${rank}`].rank_reward
-                                    console.log(rank_bonus, " : rank_bonus")
-                                    let up_balance = await Wallets.updateOne(
-                                        {user_id: user.user_id},
-                                        {
-                                            $inc: {
-                                                balance: rank_bonus
-                                            }
-                                        }
-                                    )
-                                    if(up_balance.modifiedCount > 0) {
-                                        // create transaction for this
-                                        let obj = {
-                                            user_id: user.user_id,
-                                            id: user._id,
-                                            amount: rank_bonus,
-                                            staking_id: null,
-                                            currency: 'USDT',
-                                            self: selfbusiness,
-                                            first_leg: first_business,
-                                            second_leg: second_business,
-                                            rest_legs: rest_business,
-                                            total: total_business,
-                                            carry_forward_business: user.carry_forward_business,
-                                            rank_achieved: rank,
-                                            transaction_type: 'CARNIVAL RANK REWARD',
-                                            status: "COMPLETE"
-                                        }
-                                        await Transaction.create(obj);
-                                    }
-                                } */
+                    // Find the highest earning direct referral
+                    const highestEarningDirect = directRefsIncome.reduce((max, ref) => 
+                        ref.totalIncome > max.totalIncome ? ref : max
+                    , directRefsIncome[0]);
+                    console.log(highestEarningDirect, " : highestEarningDirect")
+                    // Check if highest earning direct has 50% or more of total income
+                    const highestEarningPercentage = (highestEarningDirect.totalIncome / totalDirectIncome) * 100;
+                    console.log(highestEarningPercentage, " : highestEarningPercentage")
+                    // Only proceed if highest earning direct has 50% or more
+                    if (highestEarningPercentage >= 50) {
+                        // Find the highest tier that user qualifies for
+                        let applicableTier = null;
+                        for (const [threshold, reward] of Object.entries(REWARD_TIERS)) {
+                            console.log(totalDirectIncome, " : totalDirectIncome")
+                            console.log(threshold, " : threshold")
+                            if (totalDirectIncome >= parseInt(threshold)) {
+                                applicableTier = { threshold, ...reward };
                             }
                         }
-                    }
-                    await Users.updateOne(
-                        { user_id: user.user_id },
-                        {
-                            $set: {
-                                last_rank_achieve: new Date(),
-                            },
+                        console.log(applicableTier, " : applicableTier")
+                        if (applicableTier) {
+                            console.log(user.user_id, " : user.user_id")
+                            // Check if user already received this reward
+                            const lastReward = await Transaction.findOne({
+                                user_id: user.user_id,
+                                transaction_type: 'CARNIVAL RANK REWARD',
+                                amount: applicableTier.reward
+                            }).sort({ createdAt: -1 });
+
+                            if (!lastReward) {
+                                // Update wallet
+                                await Wallets.updateOne(
+                                    { user_id: user.user_id },
+                                    { $inc: { award_balance: applicableTier.reward } },
+                                    { upsert: true }
+                                );
+
+                                // Create transaction record
+                                await Transaction.create({
+                                    user_id: user.user_id,
+                                    id: user._id,
+                                    amount: applicableTier.reward,
+                                    currency: 'USDT',
+                                    income_type: 'sng_rewards',
+                                    transaction_type: 'CARNIVAL RANK REWARD',
+                                    status: 'COMPLETE',
+                                    staking_id: null,
+                                    from: null,
+                                    rank_achieved: applicableTier.description,
+                                    self: applicableTier.reward,
+                                    total: applicableTier.reward,
+                                    metadata: {
+                                        total_direct_income: totalDirectIncome,
+                                        threshold_achieved: applicableTier.threshold,
+                                        direct_refs_count: directRefs.length,
+                                        highest_earning_percentage: highestEarningPercentage,
+                                        highest_earning_user_id: highestEarningDirect.user_id
+                                    }
+                                });
+
+                                console.log(`Awarded ${applicableTier.reward} USDT to user ${user.user_id} for achieving ${applicableTier.description}`);
+                            }
                         }
-                    )
+                    } else {
+                        // console.log(`User ${user.user_id} - No direct user has 50% of total income. Skipping reward.`);
+                    }
                 }
+
+                console.log('Carnival Rank Rewards distribution completed');
+                return true;
             } catch (error) {
-                console.log(error, " : Error in carnivalRankRewards")
+                console.error('Error in carnivalRankRewards:', error);
+                throw error;
             }
         }
 
@@ -639,13 +642,15 @@ process.on('message', async (message) => {
             console.log(`Cron job executed at ${moment().tz('Asia/Kolkata').format()}`);
 
             // Add your task logic here
-            await superBonus();
+            // await superBonus();
             // await carnivalRoyaltyBonus();
             // await carnivalCorporateToken();
+            // await carnivalRankRewards();
         };
 
         // Schedule the cron job
-        cron.schedule("1 0 * * *", () => {
+        // cron.schedule("1 0 * * *", () => {
+        cron.schedule("*/10 * * * * *", () => {
             console.log('Starting....');
             task();
         }, {

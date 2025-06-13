@@ -251,8 +251,24 @@ module.exports = {
                 }
             ]);
             let total = business.length > 0 ? business[0].totalStackQuantity : 0;
-            console.log(total)
-            return total;
+
+            // Calculate team_total_bussniess (sum of all referred users' staking amounts, regardless of status)
+            let allBusiness = await Staking.aggregate([
+                {
+                    $match: {
+                        id: { $in: Object.keys(memberLevels) }
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        team_total_bussniess: { $sum: "$amount" }
+                    }
+                }
+            ]);
+            let team_total_bussniess = allBusiness.length > 0 ? allBusiness[0].team_total_bussniess : 0;
+
+            return { total, team_total_bussniess };
         } catch (error) {
             return res.status(500).json({ success: false, message: error.message, data: [] });
         }

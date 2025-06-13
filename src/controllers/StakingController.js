@@ -143,6 +143,11 @@ module.exports = {
         try {
             const { user_id } = req.user;
             let data = await Staking.find({ user_id: user_id }).sort({ createdAt: -1 });
+            let user = await User.findOne({ user_id: user_id });
+            data = data.map(stake => ({
+                ...stake._doc,
+                user_name: user?.name || ''
+            }));
             return res.status(200).json({ success: true, message: 'Staking Transaction Fetched!!', data: data });
         } catch (error) {
             return res.status(500).json({ success: false, message: error.message, data: [] })

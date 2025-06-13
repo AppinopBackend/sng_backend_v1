@@ -5,7 +5,10 @@ const walletSchema = mongoose.Schema(
         user_id: { type: String, requird: true },
         id: { type: String, requird: true },
         usdt_balance: { type: Number, required: false, default: 0 },
-        sng_balance: { type: Number, required: false, default: 0 }
+        sng_balance: { type: Number, required: false, default: 0 },
+        award_balance: { type: Number, required: false, default: 0 },
+        total_balance: { type: Number, required: false, default: 0 },
+        royalty_balance: { type: Number, required: false, default: 0 }
     },
     {
         timestamps: true,
