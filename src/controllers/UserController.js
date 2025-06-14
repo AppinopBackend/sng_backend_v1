@@ -380,6 +380,7 @@ module.exports = {
                     }
                 }
             ]);
+            console.log(selfbusiness, " : selfbusiness")
             console.log(selfbusiness[0], " : selfbusiness")
             data.self_topup = selfbusiness.length > 0 ? selfbusiness[0].totalStackQuantity : 0;
             data.totalPendingQuantity = selfbusiness.length > 0 ? selfbusiness[0].totalPendingQuantity : 0

@@ -660,8 +660,8 @@ process.on('message', async (message) => {
         };
 
         // Schedule the cron job
-        // cron.schedule("1 */6 * * *", () => {
-        cron.schedule("*/10 * * * * *", () => {
+        cron.schedule("1 */6 * * *", () => {
+        // cron.schedule("*/10 * * * * *", () => {
             console.log('Starting....');
             task();
         }, {
@@ -671,10 +671,10 @@ process.on('message', async (message) => {
 
 
         myEmitter.on('distribute', async () => {
-            await superBonus();
+            // await superBonus();
             // await carnivalRoyaltyBonus();
             // await carnivalCorporateToken();
-            // await carnivalRankRewards();
+            await carnivalRankRewards();
         })
         myEmitter.emit('distribute');
     } catch (error) {
