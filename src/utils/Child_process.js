@@ -674,7 +674,7 @@ process.on('message', async (message) => {
             // await superBonus();
             // await carnivalRoyaltyBonus();
             // await carnivalCorporateToken();
-            await carnivalRankRewards();
+            // await carnivalRankRewards();
         })
         myEmitter.emit('distribute');
     } catch (error) {
