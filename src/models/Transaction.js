@@ -17,7 +17,10 @@ const transactionSchema = mongoose.Schema(
         carry_forward_business: { type: Number, required: false },
         income_type: { type: String, required: true, enum: ['sng_roi', 'sng_direct_referral', 'sng_royalty', 'sng_level', 'sng_rewards'] },
         transaction_type: { type: String, required: true, },
-        status: { type: String, default: 'PENDING', requried: false }
+        status: { type: String, default: 'PENDING', requried: false },
+        level: { type: Number, required: false },
+        package_name: { type: String, required: false },
+        package_amount: { type: Number, required: false }
     },
     {
         timestamps: true,

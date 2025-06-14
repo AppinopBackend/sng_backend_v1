@@ -124,7 +124,8 @@ module.exports = {
                         transaction_type: 'DIRECT REFERRAL BONUS',
                         status: "COMPLETED",
                         from: user_id,
-                        income_type: 'sng_direct_referral'
+                        income_type: 'sng_direct_referral',
+                        package_amount: amount
                     }
                     await Transaction.create(obj);
                     console.log("Transaction Created...");
@@ -180,10 +181,26 @@ module.exports = {
                 count = await Transaction.countDocuments({  user_id: user_id })
             }
 
-            let user_name = await User.findOne({ user_id: user_id });
+            // Fetch user registration date
+            let user = await User.findOne({ user_id: user_id });
+            let user_registration_date = user ? user.createdAt : null;
+
+            // For all transactions, fetch staking_registration_date from staking_id if present
+            const stakingIds = data.map(tx => tx.staking_id).filter(id => !!id);
+            let stakingMap = {};
+            if (stakingIds.length > 0) {
+                const stakings = await Staking.find({ _id: { $in: stakingIds } });
+                stakingMap = stakings.reduce((acc, staking) => {
+                    acc[staking._id] = staking.createdAt;
+                    return acc;
+                }, {});
+            }
+
             data = data.map(userName => ({
                 ...userName._doc,
-                user_name: user_name.name
+                user_name: user?.name || '',
+                user_registration_date,
+                staking_registration_date: userName.staking_id ? stakingMap[userName.staking_id] || null : null
             }));
 
             return res.status(200).json({ success: true, message: 'Transaction Fetched Successfully!!', data: data, total: count })

@@ -62,6 +62,7 @@ process.on('message', async (message) => {
                             income_type: 'sng_roi',
                             transaction_type: 'SNG SUPER BONUS (ROI INCOME)',
                             status: "COMPLETE",
+                            package_amount: stake.amount
                         })
 
                         bulkWallet.push({
@@ -122,7 +123,9 @@ process.on('message', async (message) => {
                                         currency: stake.currency,
                                         income_type: 'sng_level',
                                         transaction_type: 'SNG SMART BONUS (LEVEL INCOME)',
-                                        status: "COMPLETE"
+                                        status: "COMPLETE",
+                                        level: up.level,
+                                        package_amount: stake.amount
                                     })
                                 }
                             }
@@ -349,7 +352,9 @@ process.on('message', async (message) => {
                                     staking_id: stake._id,
                                     currency: 'CCT',
                                     transaction_type: 'CARNIVAL CORPORATE TOKEN',
-                                    status: "COMPLETE"
+                                    status: "COMPLETE",
+                                    package_name: stake.rank,
+                                    package_amount: stake.amount
                                 });
                                 bulkWallet.push({
                                     updateOne: {
@@ -374,7 +379,9 @@ process.on('message', async (message) => {
                                 staking_id: stake._id,
                                 currency: 'CCT',
                                 transaction_type: 'CARNIVAL CORPORATE TOKEN',
-                                status: "COMPLETE"
+                                status: "COMPLETE",
+                                package_name: stake.rank,
+                                package_amount: stake.amount
                             });
                             bulkWallet.push({
                                 updateOne: {
@@ -497,7 +504,9 @@ process.on('message', async (message) => {
                                     currency: stake.currency,
                                     transaction_type: 'CARNIVAL ROYALTY BONUS',
                                     status: "COMPLETE",
-                                    from: stake.user_id
+                                    from: stake.user_id,
+                                    package_name: stake.rank,
+                                    package_amount: stake.amount
                                 })
                             }
                         }
@@ -617,7 +626,9 @@ process.on('message', async (message) => {
                                         direct_refs_count: directRefs.length,
                                         highest_earning_percentage: highestEarningPercentage,
                                         highest_earning_user_id: highestEarningDirect.user_id
-                                    }
+                                    },
+                                    package_name: applicableTier.description,
+                                    package_amount: applicableTier.reward
                                 });
 
                                 console.log(`Awarded ${applicableTier.reward} USDT to user ${user.user_id} for achieving ${applicableTier.description}`);
@@ -642,15 +653,15 @@ process.on('message', async (message) => {
             console.log(`Cron job executed at ${moment().tz('Asia/Kolkata').format()}`);
 
             // Add your task logic here
-            await superBonus();
+            // await superBonus();
             // await carnivalRoyaltyBonus();
             // await carnivalCorporateToken();
-            await carnivalRankRewards();
+            // await carnivalRankRewards();
         };
 
         // Schedule the cron job
-        cron.schedule("1 */6 * * *", () => {
-        // cron.schedule("*/10 * * * * *", () => {
+        // cron.schedule("1 */6 * * *", () => {
+        cron.schedule("*/10 * * * * *", () => {
             console.log('Starting....');
             task();
         }, {
@@ -660,7 +671,7 @@ process.on('message', async (message) => {
 
 
         myEmitter.on('distribute', async () => {
-            // await superBonus();
+            await superBonus();
             // await carnivalRoyaltyBonus();
             // await carnivalCorporateToken();
             // await carnivalRankRewards();
