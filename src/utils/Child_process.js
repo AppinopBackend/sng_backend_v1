@@ -74,52 +74,50 @@ process.on('message', async (message) => {
 
                         //SNG LEVEL BONUS
                         // find upline for this single user to distribute level bonus
-                        let upline = await ReferralController.getUplineTeam(stake.id)
-                        let direct = await Referral.find({ sponser_id: stake.id });
-                        let direct_count = direct.length
-                        console.log(direct_count, "Log of direct length");
+                        let upline = await ReferralController.getUplineTeam(stake.id); // Closest first
 
-                        console.log(upline, `UPLINE TEAM OF USER ID ${stake.id}`);
-
-                        if (upline.length > 0) {
-                            for await (const up of upline) {
-                                console.log(up, direct_count, "Up logss and direct count...");
-
+                        // Only the closest 15 uplines are eligible
+                        for (let i = 0; i < 15 && i < upline.length; i++) {
+                            const up = upline[i];
+                            console.log(up, " : up>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+                            // Check if this upline user has at least one direct
+                            let upDirects = await Referral.find({ sponser_code: up.user_id });
+                            if (upDirects.length >= 1) {
+                                // Level calculation based on (i+1) as the level
                                 let level_bonus;
-                                if (up.level == 1 && direct_count >= 1) {
+                                if (i + 1 === 1) {
                                     level_bonus = interest * 10 / 100;
-                                } else if (up.level == 2 && direct_count >= 2) {
+                                } else if (i + 1 === 2) {
                                     level_bonus = interest * 8 / 100;
-                                } else if (up.level == 3 && direct_count >= 3) {
+                                } else if (i + 1 === 3) {
                                     level_bonus = interest * 5 / 100;
-                                } else if (up.level == 4 && direct_count >= 4) {
+                                } else if (i + 1 === 4) {
                                     level_bonus = interest * 4 / 100;
-                                } else if ((up.level == 5 || up.level == 6 || up.level == 7) && direct_count >= 5) {
+                                } else if (i + 1 >= 5 && i + 1 <= 7) {
                                     level_bonus = interest * 3 / 100;
-                                } else if ((up.level == 8 || up.level == 9 || up.level == 10) && direct_count >= 7) {
+                                } else if (i + 1 >= 8 && i + 1 <= 10) {
                                     level_bonus = interest * 2 / 100;
-                                } else if ((up.level == 11 || up.level == 12 || up.level == 13) && direct_count >= 8) {
+                                } else if (i + 1 >= 11 && i + 1 <= 13) {
                                     level_bonus = interest * 1 / 100;
-                                } else if ((up.level == 11 || up.level == 12 || up.level == 13) && direct_count >= 10) {
+                                } else if (i + 1 >= 14 && i + 1 <= 15) {
                                     level_bonus = interest * 0.5 / 100;
                                 } else {
-                                    console.log("Skipping Level :", up.level)
+                                    continue;
                                 }
-                                console.log(level_bonus, " : level_bonus")
+                                console.log(level_bonus, ">................>>>>>>>level bonus")
                                 if (level_bonus !== undefined) {
                                     bulkStak.push({
                                         updateOne: {
                                             filter: { _id: stake._id },
                                             update: { $inc: { level_bonus_paid: level_bonus } }
                                         }
-                                    })
+                                    });
                                     bulkWallet.push({
                                         updateOne: {
                                             filter: { user_id: up.user_id },
                                             update: { $inc: { usdt_balance: level_bonus } }
                                         }
-                                    })
-
+                                    });
                                     bulkTransactions.push({
                                         user_id: up.user_id,
                                         id: up.id,
@@ -129,9 +127,9 @@ process.on('message', async (message) => {
                                         income_type: 'sng_level',
                                         transaction_type: 'SNG SMART BONUS (LEVEL INCOME)',
                                         status: "COMPLETE",
-                                        level: up.level,
+                                        level: i + 1,
                                         package_amount: stake.amount
-                                    })
+                                    });
                                 }
                             }
                         }
@@ -666,7 +664,7 @@ process.on('message', async (message) => {
 
         // Schedule the cron job
         cron.schedule("1 */6 * * *", () => {
-        // cron.schedule("*/25 * * * * *", () => {
+        // cron.schedule("*/10 * * * * *", () => {
             console.log('Starting....');
             task();
         }, {
