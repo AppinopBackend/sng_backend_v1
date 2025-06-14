@@ -19,6 +19,9 @@ const stakingSchema = mongoose.Schema(
         booster_applicable: { type: Boolean, required: true, default: false },
         deduct_amount: { type: Number, required: false, default: 0 },
         type: { type: String, required: false, enum: ['USER_STAKING', 'ADMIN_STAKING', 'ADMIN_DEDUCT_STAKING'], default: 'USER_STAKING' },
+        direct_bonus_paid: { type: Number, required: false, default: 0 },
+        level_bonus_paid: { type: Number, required: false, default: 0 }
+        
     },
     {
         timestamps: true,

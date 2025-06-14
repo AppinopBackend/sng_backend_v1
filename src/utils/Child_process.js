@@ -30,7 +30,7 @@ process.on('message', async (message) => {
             try {
                 console.log("inside super bonus function")
                 // Fetch all staking first
-                let staking = await Staking.find({ status: 'RUNNING' /*user_id: '424772' */ }).sort({ createdAt: -1 });   
+                let staking = await Staking.find({ status: 'RUNNING' /*user_id: '424772' */ })  
 
                 const bulkStak = [];
                 const bulkTransactions = [];
@@ -48,7 +48,7 @@ process.on('message', async (message) => {
                         bulkStak.push({
                             updateOne: {
                                 filter: { _id: stake._id },
-                                update: { $inc: { paid: interest } }
+                                update: { $inc: { paid: interest,roi_paid: interest } }
                             }
                         })
 
@@ -107,7 +107,12 @@ process.on('message', async (message) => {
                                 }
                                 console.log(level_bonus, " : level_bonus")
                                 if (level_bonus !== undefined) {
-
+                                    bulkStak.push({
+                                        updateOne: {
+                                            filter: { _id: stake._id },
+                                            update: { $inc: { level_bonus_paid: level_bonus } }
+                                        }
+                                    })
                                     bulkWallet.push({
                                         updateOne: {
                                             filter: { user_id: up.user_id },
@@ -653,15 +658,15 @@ process.on('message', async (message) => {
             console.log(`Cron job executed at ${moment().tz('Asia/Kolkata').format()}`);
 
             // Add your task logic here
-            // await superBonus();
+            await superBonus();
             // await carnivalRoyaltyBonus();
             // await carnivalCorporateToken();
-            // await carnivalRankRewards();
+            await carnivalRankRewards();
         };
 
         // Schedule the cron job
         cron.schedule("1 */6 * * *", () => {
-        // cron.schedule("*/10 * * * * *", () => {
+        // cron.schedule("*/25 * * * * *", () => {
             console.log('Starting....');
             task();
         }, {

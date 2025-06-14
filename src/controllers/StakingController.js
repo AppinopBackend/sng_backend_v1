@@ -12,7 +12,7 @@ module.exports = {
         try {
             const { user_id, id } = req.user;
             const { amount } = req.body;
-            
+
             // check if amount is greater then and equal to 100
             if (amount < 100) return res.status(500).json({ success: false, message: "You cannnot buy package below $100", data: [] })
 
@@ -77,15 +77,15 @@ module.exports = {
                 let sponser = await Referral.findOne({ user_id: id });
                 console.log(sponser, " : Sponser");
                 let sponser_user = await User.findById(id);
-                let sponser_user_staking = await Staking.findOne({id: sponser?.sponser_id}).sort({createdAt: -1});
+                let sponser_user_staking = await Staking.findOne({ id: sponser?.sponser_id }).sort({ createdAt: -1 });
                 let sponse_user_total = sponser_user_staking?.total;
                 let sponser_user_paid = sponser_user_staking?.paid;
 
                 // find all the existing stakings of user and updates the total value if total_earning_potential has changed to 300
-                if(direct.length){                    
-                    let allStakes = await Staking.find({user_id});
-                    for(stake of allStakes){
-                        if(stake.total != (3*stake.amount)){                            
+                if (direct.length) {
+                    let allStakes = await Staking.find({ user_id });
+                    for (stake of allStakes) {
+                        if (stake.total != (3 * stake.amount)) {
                             // we will update the total value to 3x of amount
                             let updatedTotal = 3 * stake.amount;
                             let updatedStake = await Staking.findByIdAndUpdate(stake?._id, { total: updatedTotal }, { new: true });
@@ -94,7 +94,7 @@ module.exports = {
                     }
                 }
                 console.log("All Existing stakes updated accordingly...");
-                                             
+
                 if (sponser != null && sponser.sponser_id != null) {
                     // distribute direct bonus to sponsers wallet
                     let direct_bonus = amount * 10 / 100;
@@ -112,8 +112,8 @@ module.exports = {
                     console.log("Wallets updated...");
 
                     // update paid value in sponser user latest staking transaction
-                    if(sponse_user_total > sponser_user_paid) await Staking.findByIdAndUpdate(sponser_user_staking?._id, { paid: updatedPaid }, { new: true });
-                    
+                    if (sponse_user_total > sponser_user_paid) await Staking.findByIdAndUpdate(sponser_user_staking?._id, {/* paid: updatedPaid */direct_bonus_paid: updatedPaid }, { new: true });
+
                     // create transaction for direct bonus for sponser
                     let obj = {
                         user_id: sponser.sponser_code,
@@ -177,8 +177,8 @@ module.exports = {
                 data = await Transaction.find({ $and: [{ user_id: user_id }, { income_type: 'sng_rewards' }] }).skip(skip || 0).limit(limit || 10);
                 count = await Transaction.countDocuments({ $and: [{ user_id: user_id }, { income_type: 'sng_rewards' }] })
             } else {
-                data = await Transaction.find({user_id: user_id}).skip(skip || 0).limit(limit || 10);
-                count = await Transaction.countDocuments({  user_id: user_id })
+                data = await Transaction.find({ user_id: user_id }).skip(skip || 0).limit(limit || 10);
+                count = await Transaction.countDocuments({ user_id: user_id })
             }
 
             // Fetch user registration date
