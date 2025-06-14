@@ -380,7 +380,6 @@ module.exports = {
                     }
                 }
             ]);
-            console.log(selfbusiness, " : selfbusiness")
             data.self_topup = selfbusiness.length > 0 ? selfbusiness[0].totalStackQuantity : 0;
             const total2Xamount = data.self_topup * 2
             const total3Xamount = data.self_topup * 3
