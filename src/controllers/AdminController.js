@@ -15,6 +15,8 @@ const AdminTransfer = require('../models/AdminTransfer');
 const ClassicNews = require('../models/ClassicNews');
 const { JWT_SECRET, JWT_EXPIRY_TIME } = process.env;
 const mongoose = require('mongoose');
+const Referral = require('../models/Referral');
+const User = require('../models/User');
 
 module.exports = {
     login: async(req, res) => {
@@ -673,62 +675,70 @@ module.exports = {
 
     addUserStacking: async (req, res) => {
         try {
-            const { user_id, amount  } = req.body;
-    
-            // Check if the amount is greater than or equal to 25 and is a multiple of 5
-            // if (amount < 25 || amount % 5 !== 0) {
-            //     return res.status(400).json({
-            //         success: false,
-            //         message: "You cannot stack below $25 & the amount should be a multiple of $5",
-            //         data: []
-            //     });
-            // }
-    
+            const { user_id, amount } = req.body;
+
+            // Check if the amount is greater than or equal to 100
+            if (amount < 100) return res.status(400).json({ success: false, message: "Staking amount must be greater than 100", data: [] });
+
             // Check if the user exists
             let user = await Users.findOne({ user_id: user_id });
             if (!user) {
-                return res.status(404).json({
-                    success: false,
-                    message: "User not found",
-                    data: []
-                });
+                return res.status(404).json({ success: false, message: "User not found", data: [] });
             }
             console.log(user, "User Log");
-            
-            
-            
-            // Check if this is the user's first staking
-            let existingStakes = await Staking.find({ user_id: user_id });
-            let isFirstStaking = existingStakes.length === 0;
 
-            if(amount < 100) return res.status(400).json({ sucess: false, message : "Staking amount must be greater than 100", data: []})
+            // Check if user has enough balance in the wallet
+            let userbalance = await Wallet.findOne({ user_id: user_id });
+            if (userbalance === null || userbalance.usdt_balance < amount) {
+                return res.status(406).json({ success: false, message: 'Insufficient Wallet Balance', data: [] });
+            }
 
+            // Deduct balance from user's wallet
+            let deduct = await Wallet.updateOne(
+                { user_id: user_id },
+                { $inc: { usdt_balance: -amount } }
+            );
+            if (!deduct || deduct.modifiedCount === 0) {
+                return res.status(400).json({ success: false, message: "Unable to deduct user wallet balance", data: [] });
+            }
+
+            // ROI and rank logic
             let roi_value, rank;
-            if(amount >= 100 && amount <= 500)  roi_value = 0.5, rank = "SILVER";
+            if (amount >= 100 && amount <= 500) roi_value = 0.5, rank = "SILVER";
             else if (amount >= 501 && amount <= 1000) roi_value = 0.6, rank = "GOLD";
             else if (amount >= 1001 && amount <= 2500) roi_value = 0.7, rank = "PLATINUM";
             else if (amount >= 2501 && amount <= 5000) roi_value = 0.8, rank = "DIAMOND";
             else if (amount >= 5001) roi_value = 1, rank = "CROWN";
 
-            console.log(roi_value, rank, "Logs");
-            let staking_value = user?.self_staking + amount;
-            // Create a new stacking record
+            // Check if this is the user's first staking
+            let existingStakes = await Staking.find({ user_id: user_id });
+            let isFirstStaking = existingStakes.length === 0;
+            let staking_value = user?.self_staking + Number(amount);
+
+            // Find direct referrals
+            let direct = await Referral.find({ sponser_id: user._id });
+            console.log(direct, "Log of direct");
+
+            // Create a staking transaction
             let obj = {
                 user_id: user_id,
-                id: user?._id,
+                id: user._id,
                 amount: amount,
                 roi: roi_value,
                 currency: 'USDT',
-                total: amount,
+                total: direct?.length > 0 ? amount * 3 : amount * 2,
                 chain: 'BEP20',
-                type: "ADMIN_STAKING"
-            }
-            console.log(obj, "Obj logss");
-            
+                type: "ADMIN_STAKING_TO_USER"
+            };
             let stake = await Staking.create(obj);
-            
+
             // Update user's self-staking status
-            let updateFields = { staking_status: 'ACTIVE',  current_rank: rank, total_earning_potential: 300, self_staking: staking_value };
+            let updateFields = {
+                staking_status: 'ACTIVE',
+                current_rank: rank,
+                total_earning_potential: direct?.length > 0 ? 300 : 200,
+                self_staking: staking_value
+            };
             if (isFirstStaking) {
                 updateFields.activation_date = new Date();
             }
@@ -736,7 +746,61 @@ module.exports = {
                 { user_id: user_id },
                 { $set: updateFields }
             );
-    
+
+            // Update all previous stakes' total if direct referrals exist
+            if (direct.length) {
+                let allStakes = await Staking.find({ user_id });
+                for (let stakeItem of allStakes) {
+                    if (stakeItem.total != (3 * stakeItem.amount)) {
+                        let updatedTotal = 3 * stakeItem.amount;
+                        await Staking.findByIdAndUpdate(stakeItem?._id, { total: updatedTotal }, { new: true });
+                    }
+                }
+            }
+            console.log("All Existing stakes updated accordingly...");
+
+            // DIRECT REFERRAL BONUS (10% to sponsor)
+            let sponser = await Referral.findOne({ user_id: user._id });
+            let sponser_user = await User.findById(user._id);
+            let sponser_user_staking = await Staking.findOne({ id: sponser?.sponser_id }).sort({ createdAt: -1 });
+            let sponse_user_total = sponser_user_staking?.total;
+            let sponser_user_paid = sponser_user_staking?.paid;
+
+            if (sponser != null && sponser.sponser_id != null) {
+                let direct_bonus = amount * 10 / 100;
+                let updatedPaid = (sponser_user_paid || 0) + direct_bonus;
+
+                // Transfer bonus to sponsor's wallet
+                await Wallet.updateOne(
+                    { user_id: sponser.sponser_code },
+                    { $inc: { usdt_balance: direct_bonus } }
+                );
+
+                // Update paid value in sponsor user latest staking transaction
+                if (sponse_user_total > sponser_user_paid) {
+                    await Staking.findByIdAndUpdate(
+                        sponser_user_staking?._id,
+                        { direct_bonus_paid: updatedPaid },
+                        { new: true }
+                    );
+                }
+
+                // Create transaction for direct bonus for sponsor
+                let bonusObj = {
+                    user_id: sponser.sponser_code,
+                    id: sponser.sponser_id,
+                    amount: direct_bonus,
+                    staking_id: stake._id,
+                    currency: 'USDT',
+                    transaction_type: 'DIRECT REFERRAL BONUS',
+                    status: "COMPLETED",
+                    from: user_id,
+                    income_type: 'sng_direct_referral',
+                    package_amount: amount
+                };
+                await Transaction.create(bonusObj);
+            }
+
             // Return success response
             return res.status(200).json({
                 success: true,

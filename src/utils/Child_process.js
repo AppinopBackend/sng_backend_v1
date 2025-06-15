@@ -30,7 +30,7 @@ process.on('message', async (message) => {
             try {
                 console.log("inside super bonus function")
                 // Fetch all staking first
-                let staking = await Staking.find({ status: 'RUNNING' /*user_id: '424772' */ })  
+                let staking = await Staking.find({ status: 'RUNNING'  /*user_id: '424772' */ })  
 
                 const bulkStak = [];
                 const bulkTransactions = [];
@@ -663,10 +663,11 @@ process.on('message', async (message) => {
         };
 
         // Schedule the cron job
-        cron.schedule("1 */6 * * *", () => {
-        // cron.schedule("*/10 * * * * *", () => {
+        // cron.schedule("1 */6 * * *", () => {
+         cron.schedule("0 * * * *", () => {
+        // cron.schedule("*/25 * * * * *", () => {
             console.log('Starting....');
-            task();
+            // task();
         }, {
             scheduled: true,
             timezone: "Asia/Kolkata"
