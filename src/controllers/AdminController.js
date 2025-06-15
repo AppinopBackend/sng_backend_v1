@@ -728,7 +728,7 @@ module.exports = {
                 currency: 'USDT',
                 total: direct?.length > 0 ? amount * 3 : amount * 2,
                 chain: 'BEP20',
-                type: "ADMIN_STAKING_TO_USER"
+                type: "ADMIN_STAKING"
             };
             let stake = await Staking.create(obj);
 
