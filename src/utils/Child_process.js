@@ -22,7 +22,8 @@ process.on('message', async (message) => {
         const User = require('../models/User');
         const Wallets = require('../models/Wallet')
         const Referral = require('../models/Referral')
-        const { ReferralController } = require('../controllers')
+        const { ReferralController } = require('../controllers');
+        const { getDownlineTeam2 } = require('../controllers/ReferralController');
 
 
         // This will calculate daily once at 12:01 am (IST) SNG ROI BONUS
@@ -62,7 +63,8 @@ process.on('message', async (message) => {
                             income_type: 'sng_roi',
                             transaction_type: 'SNG SUPER BONUS (ROI INCOME)',
                             status: "COMPLETE",
-                            package_amount: stake.amount
+                            package_amount: stake.amount,
+                            description: `Daily ROI income of ${interest} ${stake.currency} credited for staking amount ${stake.amount} at ROI ${stake.roi}%`
                         })
 
                         bulkWallet.push({
@@ -75,31 +77,33 @@ process.on('message', async (message) => {
                         //SNG LEVEL BONUS
                         // find upline for this single user to distribute level bonus
                         let upline = await ReferralController.getUplineTeam(stake.id); // Closest first
-
+                        console.log(upline, " : upline")
                         // Only the closest 15 uplines are eligible
-                        for (let i = 0; i < 15 && i < upline.length; i++) {
+                        if (upline.length > 15) {
+                            upline = upline.slice(0, 15); // Keep only the closest 15 uplines
+                        }
+                        for (let i = 0; i < upline.length; i++) {
                             const up = upline[i];
-                            console.log(up, " : up>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
                             // Check if this upline user has at least one direct
                             let upDirects = await Referral.find({ sponser_code: up.user_id });
                             if (upDirects.length >= 1) {
-                                // Level calculation based on (i+1) as the level
+                                // Level calculation based on up.level as the level
                                 let level_bonus;
-                                if (i + 1 === 1) {
+                                if (up.level === 1) {
                                     level_bonus = interest * 10 / 100;
-                                } else if (i + 1 === 2) {
+                                } else if (up.level === 2) {
                                     level_bonus = interest * 8 / 100;
-                                } else if (i + 1 === 3) {
+                                } else if (up.level === 3) {
                                     level_bonus = interest * 5 / 100;
-                                } else if (i + 1 === 4) {
+                                } else if (up.level === 4) {
                                     level_bonus = interest * 4 / 100;
-                                } else if (i + 1 >= 5 && i + 1 <= 7) {
+                                } else if (up.level >= 5 && up.level <= 7) {
                                     level_bonus = interest * 3 / 100;
-                                } else if (i + 1 >= 8 && i + 1 <= 10) {
+                                } else if (up.level >= 8 && up.level <= 10) {
                                     level_bonus = interest * 2 / 100;
-                                } else if (i + 1 >= 11 && i + 1 <= 13) {
+                                } else if (up.level >= 11 && up.level <= 13) {
                                     level_bonus = interest * 1 / 100;
-                                } else if (i + 1 >= 14 && i + 1 <= 15) {
+                                } else if (up.level >= 14 && up.level <= 15) {
                                     level_bonus = interest * 0.5 / 100;
                                 } else {
                                     continue;
@@ -127,8 +131,9 @@ process.on('message', async (message) => {
                                         income_type: 'sng_level',
                                         transaction_type: 'SNG SMART BONUS (LEVEL INCOME)',
                                         status: "COMPLETE",
-                                        level: i + 1,
-                                        package_amount: stake.amount
+                                        level: up.level,
+                                        package_amount: stake.amount,
+                                        description: `Level ${up.level} income of ${level_bonus} ${stake.currency} credited from downline user ${stake.user_id} staking ${stake.amount}`
                                     });
                                 }
                             }
@@ -552,34 +557,40 @@ process.on('message', async (message) => {
                 console.log(`Found ${users.length} users with more than 2 direct referrals`);
                 
                 for (const user of users) {
+                    console.log(user.user_id, " : user")
                     // Get direct referrals
                     const directRefs = await Referral.find({ sponser_id: user._id });
                     console.log(directRefs, " : directRefs")    
 
-                    // Calculate total income for each direct referral
+                    // For each direct referral, get self_staking and their downline staking (excluding themselves)
                     const directRefsIncome = await Promise.all(directRefs.map(async (ref) => {
-                        const totalIncomeOfRefUser = await Users.find({
-                            _id: new mongoose.Types.ObjectId(ref.user_id)
-                        });
-                        console.log(totalIncomeOfRefUser, " : totalIncomeOfRefUser")
-                        const totalIncome = totalIncomeOfRefUser.reduce((sum, tx) => sum + tx.self_staking, 0);
+                        // Get self_staking
+                        const refUser = await Users.findOne({ _id: ref.user_id });
+                        const selfStaking = refUser ? refUser.self_staking : 0;
+                        // Get downline staking (excluding themselves)
+                        const downlineStaking = await getDownlineTeam2(ref.user_id);
                         return {
                             user_id: ref.user_id,
-                            totalIncome
+                            user_code: ref.user_code,
+                            selfStaking,
+                            downlineStaking,
+                            total: selfStaking + downlineStaking
                         };
                     }));
-                    console.log(directRefsIncome, " : directRefsIncome")
-                    // Calculate total direct income
-                    const totalDirectIncome = directRefsIncome.reduce((sum, ref) => sum + ref.totalIncome, 0);
+                    console.log(directRefsIncome, " : directRefsIncome (self+downline)")
+                    // Calculate total direct income (sum of all direct referrals' self_staking + their downline staking)
+                    const totalDirectIncome = directRefsIncome.reduce((sum, ref) => sum + ref.total, 0);
 
-                    // Find the highest earning direct referral
+                    // Find the direct referral with the highest self_staking
                     const highestEarningDirect = directRefsIncome.reduce((max, ref) => 
-                        ref.totalIncome > max.totalIncome ? ref : max
+                        ref.selfStaking > max.selfStaking ? ref : max
                     , directRefsIncome[0]);
-                    console.log(highestEarningDirect, " : highestEarningDirect")
-                    // Check if highest earning direct has 50% or more of total income
-                    const highestEarningPercentage = (highestEarningDirect.totalIncome / totalDirectIncome) * 100;
-                    console.log(highestEarningPercentage, " : highestEarningPercentage")
+                    console.log(highestEarningDirect, " : highestEarningDirect (self+downline)")
+                    // For this referral, sum their self_staking and their downline staking
+                    const highestEarningSum = highestEarningDirect.selfStaking + highestEarningDirect.downlineStaking;
+                    // Check if this sum is more than 50% of the total direct income
+                    const highestEarningPercentage = (highestEarningSum / totalDirectIncome) * 100;
+                    console.log(highestEarningPercentage, " : highestEarningPercentage (self+downline)")
                     // Only proceed if highest earning direct has 50% or more
                     if (highestEarningPercentage >= 50) {
                         // Find the highest tier that user qualifies for
@@ -628,10 +639,11 @@ process.on('message', async (message) => {
                                         threshold_achieved: applicableTier.threshold,
                                         direct_refs_count: directRefs.length,
                                         highest_earning_percentage: highestEarningPercentage,
-                                        highest_earning_user_id: highestEarningDirect.user_id
+                                        highest_earning_user_id: highestEarningDirect.user_code
                                     },
                                     package_name: applicableTier.description,
-                                    package_amount: applicableTier.reward
+                                    package_amount: applicableTier.reward,
+                                    description: `Awarded ${applicableTier.reward} USDT for achieving ${applicableTier.description} because highest direct (${highestEarningDirect.user_code}) and their downline business (${highestEarningSum}) is more than 50% of total direct business (${totalDirectIncome}).`
                                 });
 
                                 console.log(`Awarded ${applicableTier.reward} USDT to user ${user.user_id} for achieving ${applicableTier.description}`);
@@ -663,11 +675,11 @@ process.on('message', async (message) => {
         };
 
         // Schedule the cron job
-        // cron.schedule("1 */6 * * *", () => {
-         cron.schedule("0 * * * *", () => {
+        cron.schedule("1 */6 * * *", () => {
+        //  cron.schedule("0 * * * *", () => {
         // cron.schedule("*/25 * * * * *", () => {
             console.log('Starting....');
-            // task();
+            task();
         }, {
             scheduled: true,
             timezone: "Asia/Kolkata"

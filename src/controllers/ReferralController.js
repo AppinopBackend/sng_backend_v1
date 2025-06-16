@@ -92,6 +92,7 @@ const directReferred = async (req, res) => {
                 // self_business: runningStakingCounts[user._id] || 0,
                 self_business: selfBusinessMap[user._id] || 0,
                 // self_stacking_amount: userStackingDetails ? userStackingDetails.amount : 0
+                user_registration_date: user.createdAt
             };
         });
 

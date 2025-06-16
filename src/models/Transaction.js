@@ -20,7 +20,9 @@ const transactionSchema = mongoose.Schema(
         status: { type: String, default: 'PENDING', requried: false },
         level: { type: Number, required: false },
         package_name: { type: String, required: false },
-        package_amount: { type: Number, required: false }
+        package_amount: { type: Number, required: false },
+        description: { type: String, required: false },
+        metadata: { type: Object, required: false }
     },
     {
         timestamps: true,
