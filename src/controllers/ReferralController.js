@@ -423,5 +423,45 @@ module.exports = {
         } catch (error) {
             throw new Error(error.message);
         }
+    },
+
+    getUplineTeamNew: async (id) => {
+        try {
+            let team = [{ userId: id, level: 0 }];
+            let allSponsors = [];
+
+            while (team.length > 0) {
+                const current = team.shift();
+                const user = await Referral.findOne({ user_id: current.userId }).lean();
+                if (!user) continue;
+
+                const sponsor = await Referral.findOne({ user_id: user.sponser_id }).lean();
+                if (!sponsor) break;
+
+                // Skip if the sponsor is the same as the original user (no self level income)
+                if (String(sponsor.user_id) === String(id)) continue;
+
+                team.push({ userId: sponsor.user_id, level: current.level + 1 });
+                allSponsors.push({ userId: sponsor.user_id, level: current.level + 1 });
+            }
+
+            // Create a lookup object to associate user IDs with their levels
+            const sponsorLevels = allSponsors.reduce((acc, sponsor) => {
+                acc[sponsor.userId] = sponsor.level;
+                return acc;
+            }, {});
+
+            // Fetch user details and include their levels in the response
+            let details = await Users.find({ _id: { $in: Object.keys(sponsorLevels) } }, { password: 0, ranks: 0 }).lean();
+            details = details.map(user => ({
+                ...user,
+                level: sponsorLevels[user._id],
+                id: (user._id).toString()
+            }));
+
+            return details;
+        } catch (error) {
+            throw new Error(error.message);
+        }
     }
 }

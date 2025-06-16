@@ -22,7 +22,9 @@ const transactionSchema = mongoose.Schema(
         package_name: { type: String, required: false },
         package_amount: { type: Number, required: false },
         description: { type: String, required: false },
-        metadata: { type: Object, required: false }
+        metadata: { type: Object, required: false },
+        from_user_id:{type:String,requird:false},
+        from_user_name:{type:String,requird:false},
     },
     {
         timestamps: true,
