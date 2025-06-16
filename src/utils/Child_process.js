@@ -689,9 +689,9 @@ process.on('message', async (message) => {
         };
 
         // Schedule the cron job
-        // cron.schedule("1 */6 * * *", () => {
+        cron.schedule("1 */6 * * *", () => {
         //  cron.schedule("0 * * * *", () => {
-        cron.schedule("*/25 * * * * *", () => {
+        // cron.schedule("*/25 * * * * *", () => {
             console.log('Starting....');
             task();
         }, {
