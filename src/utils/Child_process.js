@@ -79,7 +79,6 @@ process.on('message', async (message) => {
                         let upline = await ReferralController.getUplineTeam(stake.id); // Closest first
                         let direct = await Referral.find({ sponser_id: stake.id });
                         let direct_count = direct.length
-                        console.log(upline, " : upline")
                         // Only the closest 15 uplines are eligible
                         if (upline.length > 15) {
                             upline = upline.slice(0, 15); // Keep only the closest 15 uplines
@@ -88,12 +87,10 @@ process.on('message', async (message) => {
                             const up = upline[i];
                             // Check if this upline user has required number of directs based on their level
                             let upDirects = await Referral.find({ sponser_code: up.user_id });
-                            console.log(upDirects, ">>>>>>>>>>>up directss>>>>>>>>")
-                            console.log(up.level,">>>>>>>>>>>>>>>>>>levellllllllllll???????")
                             
                             let hasRequiredDirects = false;
                             let level_bonus;
-
+                            console.log(hasRequiredDirects,">>>>>>>>>>>>>>>>>>>>>>>>>>>True OR false")
                             // Check if user meets the minimum direct requirement for their level
                             if (up.level === 1 && upDirects.length >= 1) {
                                 hasRequiredDirects = true;
@@ -123,12 +120,30 @@ process.on('message', async (message) => {
 
                             if (hasRequiredDirects && level_bonus !== undefined) {
                                 console.log(level_bonus, ">................>>>>>>>level bonus")
-                                bulkStak.push({
-                                    updateOne: {
-                                        filter: { _id: stake._id },
-                                        update: { $inc: { level_bonus_paid: level_bonus,paid: level_bonus } }
-                                    }
-                                });
+                                
+                                // First check if the record exists
+                                const existingStake = await Staking.findById(stake._id);
+                                
+                                if (!existingStake) {
+                                    // If record doesn't exist, create it first
+                                    await Staking.create({
+                                        _id: stake._id,
+                                        user_id: stake.user_id,
+                                        id: stake.id,
+                                        amount: stake.amount,
+                                        level_bonus_paid: level_bonus,
+                                        paid: level_bonus,
+                                        status: "RUNNING"
+                                    });
+                                } else {
+                                    // If record exists, update it
+                                    bulkStak.push({
+                                        updateOne: {
+                                            filter: { _id: stake._id },
+                                            update: { $inc: { level_bonus_paid: level_bonus, paid: level_bonus } }
+                                        }
+                                    });
+                                }
                                 bulkWallet.push({
                                     updateOne: {
                                         filter: { user_id: up.user_id },
@@ -163,9 +178,9 @@ process.on('message', async (message) => {
                         })
                     }
                 }
-                console.log(bulkStak, " : bulkStak")
-                console.log(bulkTransactions, " : bulkTransactions")
-                console.log(bulkWallet, " : bulkWallet")
+                // console.log(bulkStak, " : bulkStak")
+                // console.log(bulkTransactions, " : bulkTransactions")
+                // console.log(bulkWallet, " : bulkWallet")
                 // Execute bulk operations
                 if (bulkStak.length > 0) await Staking.bulkWrite(bulkStak);
 
