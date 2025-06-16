@@ -124,6 +124,7 @@ module.exports = {
                         transaction_type: 'DIRECT REFERRAL BONUS',
                         status: "COMPLETED",
                         from: user_id,
+                        from_user_name: user.name,
                         income_type: 'sng_direct_referral',
                         package_amount: amount
                     }
@@ -200,7 +201,8 @@ module.exports = {
                 ...userName._doc,
                 user_name: user?.name || '',
                 user_registration_date,
-                staking_registration_date: userName.staking_id ? stakingMap[userName.staking_id] || null : null
+                staking_registration_date: userName.staking_id ? stakingMap[userName.staking_id] || null : null,
+                referal_name: userName.from_user_name || ''
             }));
 
             return res.status(200).json({ success: true, message: 'Transaction Fetched Successfully!!', data: data, total: count })

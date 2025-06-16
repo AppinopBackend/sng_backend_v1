@@ -193,6 +193,7 @@ module.exports = {
             details = details.map(user => ({
                 ...user,
                 stackingAmount: stackingLookup[user._id] ? stackingLookup[user._id].stackingAmount : 0,
+                user_registration_date: user.createdAt,
                 // individualAmounts: stackingLookup[user._id] ? stackingLookup[user._id].individualAmounts : []
             }));
 

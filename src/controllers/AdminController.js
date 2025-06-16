@@ -795,6 +795,7 @@ module.exports = {
                     transaction_type: 'DIRECT REFERRAL BONUS',
                     status: "COMPLETED",
                     from: user_id,
+                    from_user_name: user.name,
                     income_type: 'sng_direct_referral',
                     package_amount: amount
                 };

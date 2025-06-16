@@ -177,9 +177,64 @@ module.exports = {
             let data = await Users.findOne({ user_id: user_id }, { password: 0 }).lean();
             let selfbusiness = await ReferralController.getDownlineTeam2(id)
             let parentId = await Referral.findOne({user_code:user_id})
+            
+            // Get all downline users
+            let team = [{ userId: id, level: 0 }];
+            let allMembers = [];
+
+            while (team.length > 0) {
+                const current = team.shift();
+                const direct = await Referral.find({ sponser_id: current.userId }).lean();
+
+                if (direct.length > 0) {
+                    const levelMembers = direct.map(member => ({
+                        userId: member.user_id,
+                        level: current.level + 1
+                    }));
+
+                    team.push(...levelMembers);
+                    allMembers.push(...levelMembers);
+                }
+            }
+
+            // Get user IDs from all members
+            const memberIds = allMembers.map(member => member.userId);
+
+            // Count active and inactive users
+            const activeUsers = await Users.countDocuments({ 
+                _id: { $in: memberIds },
+                staking_status: 'ACTIVE'
+            });
+            const inactiveUsers = await Users.countDocuments({ 
+                _id: { $in: memberIds },
+                staking_status: 'INACTIVE'
+            });
+
+            // Calculate total_direct_business (sum of direct bonus earnings)
+            const directBonus = await Transaction.aggregate([
+                {
+                    $match: {
+                        $and: [
+                            { user_id: user_id },
+                            { income_type: 'sng_direct_referral' }
+                        ]
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        total: { $sum: "$amount" }
+                    }
+                }
+            ]);
+            const total_direct_business = directBonus.length > 0 ? directBonus[0].total : 0;
+
             data.sponser_code = parentId.sponser_code ? parentId.sponser_code : ""
             data.self_business = selfbusiness
             data.id = id
+            data.active_downline_users = activeUsers
+            data.inactive_downline_users = inactiveUsers
+            data.total_direct_business = total_direct_business
             return res.status(200).json({ success: true, message: 'User details fetched successfully!!', data: data })
         } catch (error) {
             return res.status(500).json({ success: false, message: error.message, data: [] })
