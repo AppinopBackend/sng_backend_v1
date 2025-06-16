@@ -112,7 +112,7 @@ module.exports = {
                     console.log("Wallets updated...");
 
                     // update paid value in sponser user latest staking transaction
-                    if (sponse_user_total > sponser_user_paid) await Staking.findByIdAndUpdate(sponser_user_staking?._id, {/* paid: updatedPaid */direct_bonus_paid: updatedPaid }, { new: true });
+                    if (sponse_user_total > sponser_user_paid) await Staking.findByIdAndUpdate(sponser_user_staking?._id, { paid: updatedPaid, direct_bonus_paid: updatedPaid }, { new: true });
 
                     // create transaction for direct bonus for sponser
                     let obj = {

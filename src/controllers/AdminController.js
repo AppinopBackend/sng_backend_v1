@@ -780,7 +780,7 @@ module.exports = {
                 if (sponse_user_total > sponser_user_paid) {
                     await Staking.findByIdAndUpdate(
                         sponser_user_staking?._id,
-                        { direct_bonus_paid: updatedPaid },
+                        { direct_bonus_paid: updatedPaid ,paid:updatedPaid},
                         { new: true }
                     );
                 }

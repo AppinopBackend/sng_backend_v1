@@ -113,7 +113,7 @@ process.on('message', async (message) => {
                                     bulkStak.push({
                                         updateOne: {
                                             filter: { _id: stake._id },
-                                            update: { $inc: { level_bonus_paid: level_bonus } }
+                                            update: { $inc: { level_bonus_paid: level_bonus,paid: level_bonus } }
                                         }
                                     });
                                     bulkWallet.push({
