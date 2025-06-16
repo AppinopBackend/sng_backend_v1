@@ -83,11 +83,11 @@ process.on('message', async (message) => {
                         if (upline.length > 15) {
                             upline = upline.slice(0, 15); // Keep only the closest 15 uplines
                         }
-                        for (let i = 0; i < upline.length; i++) {
+                        for (let i = 0; i < upline.length; i++) {   
                             const up = upline[i];
                             // Check if this upline user has required number of directs based on their level
                             let upDirects = await Referral.find({ sponser_code: up.user_id });
-                            
+                            console.log(upDirects, ">>>>>>>>>>>UPDIRECTS")
                             let hasRequiredDirects = false;
                             let level_bonus;
                             console.log(hasRequiredDirects,">>>>>>>>>>>>>>>>>>>>>>>>>>>True OR false")
@@ -117,15 +117,39 @@ process.on('message', async (message) => {
                                 hasRequiredDirects = true;
                                 level_bonus = interest * 0.5 / 100;
                             }
+                            console.log(level_bonus, ">................>>>>>>>level bonus outside")
 
                             if (hasRequiredDirects && level_bonus !== undefined) {
                                 console.log(level_bonus, ">................>>>>>>>level bonus")
-                                bulkStak.push({
-                                    updateOne: {
-                                        filter: { _id: stake._id },
-                                        update: { $inc: { level_bonus_paid: level_bonus,paid: level_bonus } }
-                                    }
-                                });
+                                
+                                // Find the latest staking record for the upline user
+                                const uplineStaking = await Staking.findOne({ id: up.id }).sort({ createdAt: -1 });
+                                
+                                if (uplineStaking) {
+                                    // If upline has a staking record, update it
+                                    bulkStak.push({
+                                        updateOne: {
+                                            filter: { _id: uplineStaking._id },
+                                            update: { $inc: { level_bonus_paid: level_bonus, paid: level_bonus } }
+                                        }
+                                    });
+                                } else {
+                                    // If upline has no staking record, create a transaction record for the level bonus
+                                    await Transaction.create({
+                                        user_id: up.user_id,
+                                        id: up.id,
+                                        amount: level_bonus,
+                                        currency: 'USDT',
+                                        income_type: 'sng_level',
+                                        transaction_type: 'LEVEL BONUS',
+                                        status: "COMPLETED",
+                                        from: stake.user_id,
+                                        from_user_name: stake.user_name,
+                                        package_amount: stake.amount,
+                                        description: `Level ${up.level} bonus from downline staking`
+                                    });
+                                }
+
                                 bulkWallet.push({
                                     updateOne: {
                                         filter: { user_id: up.user_id },

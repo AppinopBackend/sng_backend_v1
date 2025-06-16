@@ -229,7 +229,7 @@ module.exports = {
             ]);
             const total_direct_business = directBonus.length > 0 ? directBonus[0].total : 0;
 
-            data.sponser_code = parentId.sponser_code ? parentId.sponser_code : ""
+            data.sponser_code = parentId?.sponser_code ? parentId?.sponser_code : ""
             data.self_business = selfbusiness
             data.id = id
             data.active_downline_users = activeUsers
