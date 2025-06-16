@@ -120,30 +120,12 @@ process.on('message', async (message) => {
 
                             if (hasRequiredDirects && level_bonus !== undefined) {
                                 console.log(level_bonus, ">................>>>>>>>level bonus")
-                                
-                                // First check if the record exists
-                                const existingStake = await Staking.findById(stake._id);
-                                
-                                if (!existingStake) {
-                                    // If record doesn't exist, create it first
-                                    await Staking.create({
-                                        _id: stake._id,
-                                        user_id: stake.user_id,
-                                        id: stake.id,
-                                        amount: stake.amount,
-                                        level_bonus_paid: level_bonus,
-                                        paid: level_bonus,
-                                        status: "RUNNING"
-                                    });
-                                } else {
-                                    // If record exists, update it
-                                    bulkStak.push({
-                                        updateOne: {
-                                            filter: { _id: stake._id },
-                                            update: { $inc: { level_bonus_paid: level_bonus, paid: level_bonus } }
-                                        }
-                                    });
-                                }
+                                bulkStak.push({
+                                    updateOne: {
+                                        filter: { _id: stake._id },
+                                        update: { $inc: { level_bonus_paid: level_bonus,paid: level_bonus } }
+                                    }
+                                });
                                 bulkWallet.push({
                                     updateOne: {
                                         filter: { user_id: up.user_id },
