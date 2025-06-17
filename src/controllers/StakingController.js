@@ -216,12 +216,12 @@ module.exports = {
             let data = [];
             let count = 0;
 
-            // Calculate total package amount for specific income types
+            // Calculate total package amount for the requested type
             const totalPackageAmount = await Transaction.aggregate([
                 {
                     $match: {
                         user_id: user_id,
-                        income_type: {
+                        income_type: type || {
                             $in: ["sng_direct_referral", "sng_royalty", "sng_level", "sng_rewards"]
                         }
                     }
