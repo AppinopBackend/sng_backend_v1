@@ -244,11 +244,11 @@ module.exports = {
     update_profile: async (req, res) => {
         try {
             const { user_id } = req.user;
-            const { bep20_address, trc20_address, name } = req.body;
+            const { bsc_address, trc20_address, name } = req.body;
             let user = await Users.findOne({ user_id: user_id })
             const profilepicture = req.file != undefined ? `uploads/${req.file.filename}` : user.profilepicture;
             name === undefined ? user.name : name;
-            bep20_address === undefined ? user.bep20_address : bep20_address;
+            bsc_address === undefined ? user.bsc_address : bsc_address;
             trc20_address === undefined ? user.trc20_address : trc20_address;
 
             let update = await Users.updateOne(
@@ -257,7 +257,7 @@ module.exports = {
                     $set: {
                         name: name,
                         profilepicture: profilepicture,
-                        bep20_address: bep20_address,
+                        bsc_address: bsc_address,
                         trc20_address: trc20_address
                     }
                 }

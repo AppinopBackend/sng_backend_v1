@@ -10,7 +10,7 @@ const userSchema = mongoose.Schema(
         password: { type: String, required: true },
         loginStatus: { type: String, required: false, default: "ACTIVE" }, 
         profilepicture: { type: String, required: false, default: ''},
-        bep20_address: { type: String, required: false, defualt: ''},
+        bsc_address: { type: String, required: false, defualt: ''},
         trc20_address: { type: String, required: false, defualt: ''},
         current_rank: { type: String, required: false, default: 'BEGINNER'},
         staking_status: { type: String, required: false, default: 'INACTIVE'},
