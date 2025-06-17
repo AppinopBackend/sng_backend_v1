@@ -69,6 +69,11 @@ const directReferred = async (req, res) => {
         const users = await Users.find({ _id: { $in: userIds } }, { password: 0, ranks: 0 }).lean();
         const stacking_details = await Staking.find({ user_id: { $in: userCodes } });
 
+        // Calculate total package amount for all direct referrals
+        const totalPackageAmount = stacking_details
+            .filter(detail => detail.status === "RUNNING")
+            .reduce((sum, detail) => sum + (detail.amount || 0), 0);
+
         // Create a map to hold the running staking package count for each user
         const runningStakingCounts = {};
         const selfBusinessMap = {};
@@ -83,23 +88,28 @@ const directReferred = async (req, res) => {
         // Map users with additional data including staking amount
         const data = users.map(user => {
             const userStackingDetails = stacking_details.find(detail => detail.user_id === user.user_id);
+            // Calculate total direct business for this specific user
+            const userDirectBusiness = stacking_details
+                .filter(detail => detail.user_id === user.user_id)
+                .reduce((sum, detail) => sum + (detail.amount || 0), 0);
+
             return {
                 ...user,
                 id: user._id,
                 sponser_id: id,
                 index: index,
                 staking_status: user.staking_status || 'INACTIVE',
-                // self_business: runningStakingCounts[user._id] || 0,
                 self_business: selfBusinessMap[user._id] || 0,
-                // self_stacking_amount: userStackingDetails ? userStackingDetails.amount : 0
-                user_registration_date: user.createdAt
+                total_direct_business: userDirectBusiness,
+                user_registration_date: user.createdAt,
             };
         });
 
         return res.status(200).json({
             success: true,
             message: 'Direct referred fetched!!',
-            data: data
+            data: data,
+            total_package_amount: totalPackageAmount
         });
     } catch (error) {
         return res.status(500).json({

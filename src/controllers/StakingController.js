@@ -215,6 +215,33 @@ module.exports = {
             const { type, skip, limit } = req.query;
             let data = [];
             let count = 0;
+
+            // Calculate total income for each type
+            const totalDirectReferral = await Transaction.aggregate([
+                { $match: { user_id: user_id, income_type: "sng_direct_referral" } },
+                { $group: { _id: null, total: { $sum: "$amount" } } }
+            ]);
+
+            const totalRoi = await Transaction.aggregate([
+                { $match: { user_id: user_id, income_type: "sng_roi" } },
+                { $group: { _id: null, total: { $sum: "$amount" } } }
+            ]);
+
+            const totalRoyalty = await Transaction.aggregate([
+                { $match: { user_id: user_id, income_type: "sng_royalty" } },
+                { $group: { _id: null, total: { $sum: "$amount" } } }
+            ]);
+
+            const totalLevel = await Transaction.aggregate([
+                { $match: { user_id: user_id, income_type: "sng_level" } },
+                { $group: { _id: null, total: { $sum: "$amount" } } }
+            ]);
+
+            const totalRewards = await Transaction.aggregate([
+                { $match: { user_id: user_id, income_type: "sng_rewards" } },
+                { $group: { _id: null, total: { $sum: "$amount" } } }
+            ]);
+
             if (type === "sng_direct_referral") {
                 data = await Transaction.find({
                     $and: [{ user_id: user_id }, { income_type: "sng_direct_referral" }],
@@ -299,6 +326,13 @@ module.exports = {
                     message: "Transaction Fetched Successfully!!",
                     data: data,
                     total: count,
+                    total_income: {
+                        direct_referral: totalDirectReferral[0]?.total || 0,
+                        roi: totalRoi[0]?.total || 0,
+                        royalty: totalRoyalty[0]?.total || 0,
+                        level: totalLevel[0]?.total || 0,
+                        rewards: totalRewards[0]?.total || 0
+                    }
                 });
         } catch (error) {
             return res
