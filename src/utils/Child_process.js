@@ -597,12 +597,12 @@ process.on('message', async (message) => {
                     const directRefs = await Referral.find({ sponser_id: user._id });
                     console.log(directRefs, " : directRefs")    
 
-                    // For each direct referral, get self_staking and their downline staking (excluding themselves)
+                    // For each direct referral, get self_staking and their downline staking
                     const directRefsIncome = await Promise.all(directRefs.map(async (ref) => {
                         // Get self_staking
                         const refUser = await Users.findOne({ _id: ref.user_id });
                         const selfStaking = refUser ? refUser.self_staking : 0;
-                        // Get downline staking (excluding themselves)
+                        // Get downline staking
                         const downlineStaking = await getDownlineTeam2(ref.user_id);
                         return {
                             user_id: ref.user_id,
@@ -613,79 +613,82 @@ process.on('message', async (message) => {
                         };
                     }));
                     console.log(directRefsIncome, " : directRefsIncome (self+downline)")
-                    // Calculate total direct income (sum of all direct referrals' self_staking + their downline staking)
-                    const totalDirectIncome = directRefsIncome.reduce((sum, ref) => sum + ref.total, 0);
 
-                    // Find the direct referral with the highest self_staking
+                    // Find the direct referral with the highest total staking
                     const highestEarningDirect = directRefsIncome.reduce((max, ref) => 
-                        ref.selfStaking > max.selfStaking ? ref : max
+                        ref.total > max.total ? ref : max
                     , directRefsIncome[0]);
                     console.log(highestEarningDirect, " : highestEarningDirect (self+downline)")
-                    // For this referral, sum their self_staking and their downline staking
-                    const highestEarningSum = highestEarningDirect.selfStaking + highestEarningDirect.downlineStaking;
-                    // Check if this sum is more than 50% of the total direct income
-                    const highestEarningPercentage = (highestEarningSum / totalDirectIncome) * 100;
-                    console.log(highestEarningPercentage, " : highestEarningPercentage (self+downline)")
-                    // Only proceed if highest earning direct has 50% or more
-                    if (highestEarningPercentage >= 50) {
-                        // Find the highest tier that user qualifies for
-                        let applicableTier = null;
-                        for (const [threshold, reward] of Object.entries(REWARD_TIERS)) {
-                            console.log(totalDirectIncome, " : totalDirectIncome")
-                            console.log(threshold, " : threshold")
-                            if (totalDirectIncome >= parseInt(threshold)) {
-                                applicableTier = { threshold, ...reward };
-                            }
+
+                    // Calculate 50% of the highest earning direct's total
+                    const highestEarningSum = highestEarningDirect.total;
+                    const fiftyPercentOfHighest = highestEarningSum * 0.5;
+
+                    // Calculate sum of other direct referrals' total staking
+                    const otherDirectsSum = directRefsIncome
+                        .filter(ref => ref.user_id !== highestEarningDirect.user_id)
+                        .reduce((sum, ref) => sum + ref.total, 0);
+
+                    // Calculate final total for reward tier determination
+                    const finalTotal = fiftyPercentOfHighest + otherDirectsSum;
+                    console.log(finalTotal, " : finalTotal for reward tier")
+
+                    // Find the highest tier that user qualifies for
+                    let applicableTier = null;
+                    for (const [threshold, reward] of Object.entries(REWARD_TIERS)) {
+                        if (finalTotal >= parseInt(threshold)) {
+                            applicableTier = { threshold, ...reward };
                         }
-                        console.log(applicableTier, " : applicableTier")
-                        if (applicableTier) {
-                            console.log(user.user_id, " : user.user_id")
-                            // Check if user already received this reward
-                            const lastReward = await Transaction.findOne({
+                    }
+                    console.log(applicableTier, " : applicableTier")
+
+                    if (applicableTier) {
+                        console.log(user.user_id, " : user.user_id")
+                        // Check if user already received this reward
+                        const lastReward = await Transaction.findOne({
+                            user_id: user.user_id,
+                            transaction_type: 'CARNIVAL RANK REWARD',
+                            amount: applicableTier.reward
+                        }).sort({ createdAt: -1 });
+
+                        if (!lastReward) {
+                            // Update wallet
+                            await Wallets.updateOne(
+                                { user_id: user.user_id },
+                                { $inc: { award_balance: applicableTier.reward } },
+                                { upsert: true }
+                            );
+
+                            // Create transaction record
+                            await Transaction.create({
                                 user_id: user.user_id,
+                                id: user._id,
+                                amount: applicableTier.reward,
+                                currency: 'USDT',
+                                income_type: 'sng_rewards',
                                 transaction_type: 'CARNIVAL RANK REWARD',
-                                amount: applicableTier.reward
-                            }).sort({ createdAt: -1 });
+                                status: 'COMPLETE',
+                                staking_id: null,
+                                from: null,
+                                rank_achieved: applicableTier.description,
+                                self: applicableTier.reward,
+                                total: applicableTier.reward,
+                                metadata: {
+                                    final_total: finalTotal,
+                                    threshold_achieved: applicableTier.threshold,
+                                    direct_refs_count: directRefs.length,
+                                    highest_earning_user_id: highestEarningDirect.user_code,
+                                    highest_earning_total: highestEarningSum,
+                                    fifty_percent_of_highest: fiftyPercentOfHighest,
+                                    other_directs_sum: otherDirectsSum
+                                },
+                                package_name: applicableTier.description,
+                                package_amount: applicableTier.reward,
+                                description: `Awarded ${applicableTier.reward} USDT for achieving ${applicableTier.description} based on 50% of highest direct (${highestEarningDirect.user_code}) total (${highestEarningSum}) plus other directs total (${otherDirectsSum}).`
+                            });
 
-                            if (!lastReward) {
-                                // Update wallet
-                                await Wallets.updateOne(
-                                    { user_id: user.user_id },
-                                    { $inc: { award_balance: applicableTier.reward } },
-                                    { upsert: true }
-                                );
-
-                                // Create transaction record
-                                await Transaction.create({
-                                    user_id: user.user_id,
-                                    id: user._id,
-                                    amount: applicableTier.reward,
-                                    currency: 'USDT',
-                                    income_type: 'sng_rewards',
-                                    transaction_type: 'CARNIVAL RANK REWARD',
-                                    status: 'COMPLETE',
-                                    staking_id: null,
-                                    from: null,
-                                    rank_achieved: applicableTier.description,
-                                    self: applicableTier.reward,
-                                    total: applicableTier.reward,
-                                    metadata: {
-                                        total_direct_income: totalDirectIncome,
-                                        threshold_achieved: applicableTier.threshold,
-                                        direct_refs_count: directRefs.length,
-                                        highest_earning_percentage: highestEarningPercentage,
-                                        highest_earning_user_id: highestEarningDirect.user_code
-                                    },
-                                    package_name: applicableTier.description,
-                                    package_amount: applicableTier.reward,
-                                    description: `Awarded ${applicableTier.reward} USDT for achieving ${applicableTier.description} because highest direct (${highestEarningDirect.user_code}) and their downline business (${highestEarningSum}) is more than 50% of total direct business (${totalDirectIncome}).`
-                                });
-
-                                console.log(`Awarded ${applicableTier.reward} USDT to user ${user.user_id} for achieving ${applicableTier.description}`);
-                            }
+                            console.log(`Awarded ${applicableTier.reward} USDT to user ${user.user_id} for achieving ${applicableTier.description}`);
                         }
-                    } else {
-                        // console.log(`User ${user.user_id} - No direct user has 50% of total income. Skipping reward.`);
                     }
                 }
 
@@ -706,13 +709,13 @@ process.on('message', async (message) => {
             await superBonus();
             // await carnivalRoyaltyBonus();
             // await carnivalCorporateToken();
-            await carnivalRankRewards();
+            // await carnivalRankRewards();
         };
 
         // Schedule the cron job
-        cron.schedule("1 */6 * * *", () => {
+        // cron.schedule("1 */6 * * *", () => {
         //  cron.schedule("0 * * * *", () => {
-        // cron.schedule("*/25 * * * * *", () => {
+        cron.schedule("*/120 * * * * *", () => {
             console.log('Starting....');
             task();
         }, {

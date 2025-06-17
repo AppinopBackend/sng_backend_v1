@@ -216,6 +216,24 @@ module.exports = {
             let data = [];
             let count = 0;
 
+            // Calculate total package amount for specific income types
+            const totalPackageAmount = await Transaction.aggregate([
+                {
+                    $match: {
+                        user_id: user_id,
+                        income_type: {
+                            $in: ["sng_direct_referral", "sng_royalty", "sng_level", "sng_rewards"]
+                        }
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        total: { $sum: "$package_amount" }
+                    }
+                }
+            ]);
+
             // Calculate total income for each type
             const totalDirectReferral = await Transaction.aggregate([
                 { $match: { user_id: user_id, income_type: "sng_direct_referral" } },
@@ -332,7 +350,8 @@ module.exports = {
                         royalty: totalRoyalty[0]?.total || 0,
                         level: totalLevel[0]?.total || 0,
                         rewards: totalRewards[0]?.total || 0
-                    }
+                    },
+                    total_package_amount: totalPackageAmount[0]?.total || 0
                 });
         } catch (error) {
             return res
