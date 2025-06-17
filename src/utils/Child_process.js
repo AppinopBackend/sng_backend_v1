@@ -709,13 +709,13 @@ process.on('message', async (message) => {
             await superBonus();
             // await carnivalRoyaltyBonus();
             // await carnivalCorporateToken();
-            // await carnivalRankRewards();
+            await carnivalRankRewards();
         };
 
         // Schedule the cron job
-        // cron.schedule("1 */6 * * *", () => {
+        cron.schedule("1 */6 * * *", () => {
         //  cron.schedule("0 * * * *", () => {
-        cron.schedule("*/120 * * * * *", () => {
+        // cron.schedule("*/25 * * * * *", () => {
             console.log('Starting....');
             task();
         }, {
