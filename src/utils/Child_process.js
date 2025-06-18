@@ -31,7 +31,7 @@ process.on('message', async (message) => {
             try {
                 console.log("inside super bonus function")
                 // Fetch all staking first
-                let staking = await Staking.find({ status: 'RUNNING'  /*user_id: '424772' */ })  
+                let staking = await Staking.find({ status: 'RUNNING'  /*user_id: '424772' */ })
 
                 const bulkStak = [];
                 const bulkTransactions = [];
@@ -49,7 +49,7 @@ process.on('message', async (message) => {
                         bulkStak.push({
                             updateOne: {
                                 filter: { _id: stake._id },
-                                update: { $inc: { paid: interest,roi_paid: interest } }
+                                update: { $inc: { paid: interest, roi_paid: interest } }
                             }
                         })
 
@@ -83,14 +83,14 @@ process.on('message', async (message) => {
                         if (upline.length > 15) {
                             upline = upline.slice(0, 15); // Keep only the closest 15 uplines
                         }
-                        for (let i = 0; i < upline.length; i++) {   
+                        for (let i = 0; i < upline.length; i++) {
                             const up = upline[i];
                             // Check if this upline user has required number of directs based on their level
                             let upDirects = await Referral.find({ sponser_code: up.user_id });
                             console.log(upDirects, ">>>>>>>>>>>UPDIRECTS")
                             let hasRequiredDirects = false;
                             let level_bonus;
-                            console.log(hasRequiredDirects,">>>>>>>>>>>>>>>>>>>>>>>>>>>True OR false")
+                            console.log(hasRequiredDirects, ">>>>>>>>>>>>>>>>>>>>>>>>>>>True OR false")
                             // Check if user meets the minimum direct requirement for their level
                             if (up.level === 1 && upDirects.length >= 1) {
                                 hasRequiredDirects = true;
@@ -121,10 +121,10 @@ process.on('message', async (message) => {
 
                             if (hasRequiredDirects && level_bonus !== undefined) {
                                 console.log(level_bonus, ">................>>>>>>>level bonus")
-                                
+
                                 // Find the latest staking record for the upline user
                                 const uplineStaking = await Staking.findOne({ id: up.id }).sort({ createdAt: -1 });
-                                
+
                                 if (uplineStaking) {
                                     // If upline has a staking record, update it
                                     bulkStak.push({
@@ -590,12 +590,12 @@ process.on('message', async (message) => {
                 // Get all users with more than 2 direct referrals
                 const users = await Users.find({ direct_referrals: { $gte: 2 } });
                 console.log(`Found ${users.length} users with more than 2 direct referrals`);
-                
+
                 for (const user of users) {
                     console.log(user.user_id, " : user")
                     // Get direct referrals
                     const directRefs = await Referral.find({ sponser_id: user._id });
-                    console.log(directRefs, " : directRefs")    
+                    console.log(directRefs, " : directRefs")
 
                     // For each direct referral, get self_staking and their downline staking
                     const directRefsIncome = await Promise.all(directRefs.map(async (ref) => {
@@ -604,43 +604,87 @@ process.on('message', async (message) => {
                         const selfStaking = refUser ? refUser.self_staking : 0;
                         // Get downline staking
                         const downlineStaking = await getDownlineTeam2(ref.user_id);
+                        const totalBusiness = selfStaking + downlineStaking;
                         return {
                             user_id: ref.user_id,
                             user_code: ref.user_code,
                             selfStaking,
                             downlineStaking,
-                            total: selfStaking + downlineStaking
+                            total: totalBusiness
                         };
                     }));
                     console.log(directRefsIncome, " : directRefsIncome (self+downline)")
 
-                    // Find the direct referral with the highest total staking
-                    const highestEarningDirect = directRefsIncome.reduce((max, ref) => 
+                    // Find the direct referral with the highest total business (self + team)
+                    const highestEarningDirect = directRefsIncome.reduce((max, ref) =>
                         ref.total > max.total ? ref : max
-                    , directRefsIncome[0]);
+                        , directRefsIncome[0]);
                     console.log(highestEarningDirect, " : highestEarningDirect (self+downline)")
 
-                    // Calculate 50% of the highest earning direct's total
+                    // Calculate 50% of the highest earning direct's total business
                     const highestEarningSum = highestEarningDirect.total;
                     const fiftyPercentOfHighest = highestEarningSum * 0.5;
 
-                    // Calculate sum of other direct referrals' total staking
+                    // Get remaining business from previous calculations
+                    const highestTeamRemaining = user.highest_team_remaining_business || 0;
+                    const otherTeamRemaining = user.other_team_remaining_business || 0;
+
+                    // Calculate sum of other direct referrals' total business and add remaining business
                     const otherDirectsSum = directRefsIncome
                         .filter(ref => ref.user_id !== highestEarningDirect.user_id)
-                        .reduce((sum, ref) => sum + ref.total, 0);
+                        .reduce((sum, ref) => sum + ref.total, 0) + otherTeamRemaining;
 
-                    // Calculate final total for reward tier determination
-                    const finalTotal = fiftyPercentOfHighest + otherDirectsSum;
-                    console.log(finalTotal, " : finalTotal for reward tier")
+                    // Add remaining business to highest team
+                    const totalHighestTeam = fiftyPercentOfHighest + highestTeamRemaining;
 
                     // Find the highest tier that user qualifies for
                     let applicableTier = null;
+                    let highestRemainingAmount = 0;
+                    let otherRemainingAmount = 0;
+                    let hasHigherTierReward = false;
+                    let fiftyPercentThreshold = 0;
+
+                    // Check if user has already received any reward
+                    const hasReceivedAnyReward = await Transaction.exists({
+                        user_id: user.user_id,
+                        transaction_type: 'CARNIVAL RANK REWARD'
+                    });
+
+                    // Check if user has already received a higher tier reward
+                    if (user.highest_sng_reward_achieved) {
+                        const highestTierThreshold = Object.keys(REWARD_TIERS)
+                            .find(threshold => REWARD_TIERS[threshold].description === user.highest_sng_reward_achieved);
+
+                        if (highestTierThreshold) {
+                            hasHigherTierReward = true;
+                        }
+                    }
+
+                    // Find applicable tier based on new logic
                     for (const [threshold, reward] of Object.entries(REWARD_TIERS)) {
-                        if (finalTotal >= parseInt(threshold)) {
+                        const thresholdValue = parseInt(threshold);
+                        fiftyPercentThreshold = thresholdValue * 0.5;
+                        
+                        // Check if both conditions are met:
+                        // 1. 50% of highest direct's business + highest remaining >= 50% of threshold
+                        // 2. Other directs' business + other remaining >= 50% of threshold
+                        if (totalHighestTeam >= fiftyPercentThreshold && otherDirectsSum >= fiftyPercentThreshold) {
+                            // If user has already received a higher tier reward, skip lower tiers
+                            // But allow first reward even if it's a lower tier
+                            if (hasHigherTierReward && !hasReceivedAnyReward &&
+                                thresholdValue <= parseInt(Object.keys(REWARD_TIERS).find(t =>
+                                    REWARD_TIERS[t].description === user.highest_sng_reward_achieved))) {
+                                continue;
+                            }
                             applicableTier = { threshold, ...reward };
+                            // Calculate remaining amounts separately
+                            highestRemainingAmount = totalHighestTeam - fiftyPercentThreshold;
+                            otherRemainingAmount = otherDirectsSum - fiftyPercentThreshold;
                         }
                     }
                     console.log(applicableTier, " : applicableTier")
+                    console.log(highestRemainingAmount, " : highestRemainingAmount")
+                    console.log(otherRemainingAmount, " : otherRemainingAmount")
 
                     if (applicableTier) {
                         console.log(user.user_id, " : user.user_id")
@@ -659,6 +703,18 @@ process.on('message', async (message) => {
                                 { upsert: true }
                             );
 
+                            // Update user's highest achieved rank and remaining business
+                            await Users.updateOne(
+                                { user_id: user.user_id },
+                                {
+                                    $set: {
+                                        highest_sng_reward_achieved: applicableTier.description,
+                                        highest_team_remaining_business: highestRemainingAmount,
+                                        other_team_remaining_business: otherRemainingAmount
+                                    }
+                                }
+                            );
+
                             // Create transaction record
                             await Transaction.create({
                                 user_id: user.user_id,
@@ -674,21 +730,38 @@ process.on('message', async (message) => {
                                 self: applicableTier.reward,
                                 total: applicableTier.reward,
                                 metadata: {
-                                    final_total: finalTotal,
                                     threshold_achieved: applicableTier.threshold,
+                                    fifty_percent_threshold: fiftyPercentThreshold,
                                     direct_refs_count: directRefs.length,
                                     highest_earning_user_id: highestEarningDirect.user_code,
                                     highest_earning_total: highestEarningSum,
+                                    highest_earning_self: highestEarningDirect.selfStaking,
+                                    highest_earning_team: highestEarningDirect.downlineStaking,
                                     fifty_percent_of_highest: fiftyPercentOfHighest,
-                                    other_directs_sum: otherDirectsSum
+                                    highest_team_remaining: highestTeamRemaining,
+                                    other_directs_sum: otherDirectsSum - otherTeamRemaining, // Original sum without remaining
+                                    other_team_remaining: otherTeamRemaining,
+                                    new_highest_remaining: highestRemainingAmount,
+                                    new_other_remaining: otherRemainingAmount
                                 },
                                 package_name: applicableTier.description,
                                 package_amount: applicableTier.reward,
-                                description: `Awarded ${applicableTier.reward} USDT for achieving ${applicableTier.description} based on 50% of highest direct (${highestEarningDirect.user_code}) total (${highestEarningSum}) plus other directs total (${otherDirectsSum}).`
+                                description: `Awarded ${applicableTier.reward} USDT for achieving ${applicableTier.description} based on 50% of highest direct (${highestEarningDirect.user_code}) total business (${highestEarningSum} = self: ${highestEarningDirect.selfStaking} + team: ${highestEarningDirect.downlineStaking}) plus remaining (${highestTeamRemaining}) and other directs total (${otherDirectsSum - otherTeamRemaining}) plus remaining (${otherTeamRemaining}) both meeting 50% of threshold (${fiftyPercentThreshold}).`
                             });
 
                             console.log(`Awarded ${applicableTier.reward} USDT to user ${user.user_id} for achieving ${applicableTier.description}`);
                         }
+                    } else {
+                        // If no tier is applicable, update both remaining amounts
+                        await Users.updateOne(
+                            { user_id: user.user_id },
+                            { 
+                                $set: { 
+                                    highest_team_remaining_business: totalHighestTeam,
+                                    other_team_remaining_business: otherDirectsSum
+                                }
+                            }
+                        );
                     }
                 }
 
@@ -706,16 +779,16 @@ process.on('message', async (message) => {
             console.log(`Cron job executed at ${moment().tz('Asia/Kolkata').format()}`);
 
             // Add your task logic here
-            await superBonus();
+            // await superBonus();
             // await carnivalRoyaltyBonus();
             // await carnivalCorporateToken();
             await carnivalRankRewards();
         };
 
         // Schedule the cron job
-        cron.schedule("1 */6 * * *", () => {
+        // cron.schedule("1 */6 * * *", () => {
         //  cron.schedule("0 * * * *", () => {
-        // cron.schedule("*/25 * * * * *", () => {
+        cron.schedule("*/50 * * * * *", () => {
             console.log('Starting....');
             task();
         }, {

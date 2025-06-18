@@ -20,6 +20,9 @@ const userSchema = mongoose.Schema(
         last_rank_achieve: { type: Date, required: false, default: null},
         activation_date: { type: Date, required: false },
         carry_forward_business: { type: Number, required: false, default: 0 },
+        highest_team_remaining_business: { type: Number, required: false, default: 0 },
+        other_team_remaining_business: { type: Number, required: false, default: 0 },
+        highest_sng_reward_achieved: { type: String, required: false, default: null },
         // ranks: {
         //     SILVER: {
         //         staking_required: { type: Number, required: false, default: 100 },
