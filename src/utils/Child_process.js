@@ -602,7 +602,8 @@ process.on('message', async (message) => {
                         // Get self_staking
                         const refUser = await Users.findOne({ _id: ref.user_id });
                         const selfStaking = refUser ? refUser.self_staking : 0;
-                        // Get downline staking
+                        
+                        // Get downline staking - only count new staking amounts
                         const downlineStaking = await getDownlineTeam2(ref.user_id);
                         const totalBusiness = selfStaking + downlineStaking;
                         return {
@@ -696,6 +697,11 @@ process.on('message', async (message) => {
                         }).sort({ createdAt: -1 });
 
                         if (!lastReward) {
+                            console.log("\n=== RANK REWARD AWARDED ===");
+                            console.log(`User ID: ${user.user_id}`);
+                            console.log(`Award Amount: ${applicableTier.reward} USDT`);
+                            console.log(`Rank Achieved: ${applicableTier.description}`);
+                            
                             // Update wallet
                             await Wallets.updateOne(
                                 { user_id: user.user_id },
@@ -714,6 +720,33 @@ process.on('message', async (message) => {
                                     }
                                 }
                             );
+
+                            // Mark all counted staking amounts as counted for both highest earning direct and other directs
+                            const allUserIds = [
+                                highestEarningDirect.user_id,
+                                ...directRefs.map(ref => ref.user_id)
+                            ];
+                            console.log(allUserIds, " : allUserIds")
+                            console.log("\nUpdating staking records for rank reward calculation:");
+                            console.log(`- Highest earning direct: ${highestEarningDirect.user_code} (${highestEarningDirect.user_id})`);
+                            console.log(`- Other direct referrals: ${directRefs.map(ref => ref.user_code).join(', ')}`);
+
+                            // Update rank_reward_counted to true for all staking amounts that were counted
+                            const updateResult = await Staking.updateMany(
+                                { 
+                                    $and: [
+                                        { id: { $in: allUserIds } },
+                                        { rank_reward_counted: false },
+                                        { status: "RUNNING" }
+                                    ]
+                                },
+                                { $set: { rank_reward_counted: true } }
+                            );
+
+                            console.log("\nStaking Update Result:");
+                            console.log(`- Modified count: ${updateResult.modifiedCount}`);
+                            console.log(`- Matched count: ${updateResult.matchedCount}`);
+                            console.log("=== END OF RANK REWARD ===\n");
 
                             // Create transaction record
                             await Transaction.create({
@@ -788,9 +821,9 @@ process.on('message', async (message) => {
         // Schedule the cron job
         // cron.schedule("1 */6 * * *", () => {
         //  cron.schedule("0 * * * *", () => {
-        cron.schedule("*/50 * * * * *", () => {
+        cron.schedule("*/25 * * * * *", () => {
             console.log('Starting....');
-            task();
+            // task(); 
         }, {
             scheduled: true,
             timezone: "Asia/Kolkata"

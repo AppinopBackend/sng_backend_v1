@@ -40,7 +40,8 @@ const getDownlineTeam2 = async (id) => {
                 $match: {
                     $and: [
                         { id: { $in: Object.keys(memberLevels) } },
-                        { status: "RUNNING" }
+                        { status: "RUNNING" },
+                        { rank_reward_counted: false } // Only count staking amounts that haven't been counted for rank rewards
                     ]
                 }
             },
@@ -251,7 +252,8 @@ module.exports = {
                     $match: {
                         $and: [
                             { id: { $in: Object.keys(memberLevels) } },
-                            { status: "RUNNING" }
+                            { status: "RUNNING" },
+                            { rank_reward_counted: false } // Only count staking amounts that haven't been counted for rank rewards
                         ]
                     }
                 },
