@@ -5,6 +5,7 @@ const mongoose = require('mongoose');
 
 const cron = require('node-cron');
 const moment = require('moment-timezone');
+const { logToDb, logRewardUser } = require('./Logger');
 
 console.log('Cron job scheduled to run at 12:01 AM IST');
 
@@ -73,6 +74,21 @@ process.on('message', async (message) => {
                                 update: { $inc: { usdt_balance: interest } }
                             }
                         })
+
+                        // ROI (super bonus) logging
+                        await logRewardUser({
+                            user_id: stake.user_id,
+                            user_code: stake.user_code || '',
+                            type: 'roi',
+                            details: {
+                                interest,
+                                staking_id: stake._id,
+                                amount: stake.amount,
+                                roi: stake.roi,
+                                currency: stake.currency,
+                                description: `Daily ROI income of ${interest} ${stake.currency} credited for staking amount ${stake.amount} at ROI ${stake.roi}%`
+                            }
+                        });
 
                         //SNG LEVEL BONUS
                         // find upline for this single user to distribute level bonus
@@ -170,6 +186,24 @@ process.on('message', async (message) => {
                                     from_user_id: stake.user_id,
                                     from_user_name: stake.user_id,
                                     description: `Level ${up.level} income of ${level_bonus} ${stake.currency} credited from downline user ${stake.user_id} staking ${stake.amount}`
+                                });
+
+                                // Level income logging
+                                await logRewardUser({
+                                    user_id: up.user_id,
+                                    user_code: up.user_code || '',
+                                    type: 'levelIncome',
+                                    details: {
+                                        level: up.level,
+                                        level_bonus,
+                                        from_user_id: stake.user_id,
+                                        from_user_name: stake.user_name,
+                                        staking_id: stake._id,
+                                        amount: stake.amount,
+                                        roi: stake.roi,
+                                        currency: stake.currency,
+                                        description: `Level ${up.level} income of ${level_bonus} ${stake.currency} credited from downline user ${stake.user_id} staking ${stake.amount}`
+                                    }
                                 });
                             }
                         }
@@ -623,12 +657,17 @@ process.on('message', async (message) => {
                 // Get all users with more than 2 direct referrals
                 const users = await Users.find({ direct_referrals: { $gte: 2 } });
                 console.log(`Found ${users.length} users with more than 2 direct referrals`);
+                logToDb('info', 'Found users with more than 2 direct referrals', { count: users.length });
+
+                let allRewardedStakingIds = [];
 
                 for (const user of users) {
                     console.log(user.user_id, " : user")
+                    logToDb('info', 'Processing user', { user_id: user.user_id });
                     // Get direct referrals
                     const directRefs = await Referral.find({ sponser_id: user._id });
                     console.log(directRefs, " : directRefs")
+                    logToDb('info', 'Direct referrals', { directRefs });
 
                     // Calculate total business for each direct referral
                     const directRefsIncome = await Promise.all(directRefs.map(async (ref) => {
@@ -820,24 +859,10 @@ process.on('message', async (message) => {
                                 highest_sng_reward_achieved: applicableTier.threshold.toString()
                             });
 
-                            // Update rank_reward_counted for all staking records that were counted
-                            const allStakingIds = directRefsIncome.reduce((ids, ref) => {
+                            // Instead of updating here, collect the IDs
+                            allRewardedStakingIds.push(...directRefsIncome.reduce((ids, ref) => {
                                 return [...ids, ...ref.stakingIds];
-                            }, []);
-
-                            if (allStakingIds.length > 0) {
-                                await Staking.updateMany(
-                                    {
-                                        _id: { $in: allStakingIds },
-                                        rank_reward_counted: false,
-                                        status: "RUNNING"
-                                    },
-                                    {
-                                        $set: { rank_reward_counted: true }
-                                    }
-                                );
-                            }
-
+                            }, []));
                             console.log(`Reward of ${applicableTier.reward} USDT given to user ${user.user_id}`);
                             console.log(`Updated remaining amounts - Highest: ${highestRemainingAmount}, Other: ${otherRemainingAmount}`);
                         }
@@ -850,6 +875,20 @@ process.on('message', async (message) => {
                     console.log(highestRemainingAmount, " : highestRemainingAmount");
                     console.log(otherRemainingAmount, " : otherRemainingAmount");
                     console.log(user.user_id, " : user.user_id");
+                }
+
+                // After all users are processed, update all rewarded staking IDs
+                if (allRewardedStakingIds.length > 0) {
+                    await Staking.updateMany(
+                        {
+                            _id: { $in: allRewardedStakingIds },
+                            rank_reward_counted: false,
+                            status: "RUNNING"
+                        },
+                        {
+                            $set: { rank_reward_counted: true }
+                        }
+                    );
                 }
 
                 console.log('Carnival Rank Rewards distribution completed');
@@ -866,17 +905,18 @@ process.on('message', async (message) => {
             console.log(`Cron job executed at ${moment().tz('Asia/Kolkata').format()}`);
 
             // Add your task logic here
-            // await superBonus();
+            await superBonus();
             // await carnivalRoyaltyBonus();
             // await carnivalCorporateToken();
             await carnivalRankRewards();
         };
 
         // Schedule the cron job
-        cron.schedule("1 0 * * *", () => {
+        // cron.schedule("1 0 * * *", () => {
             //  cron.schedule("0 * * * *", () => {
-        // cron.schedule("*/25 * * * * *", () => {
+        cron.schedule("*/50 * * * * *", () => {
             console.log('Starting....');
+            logToDb('info', 'Starting....');
             task(); 
         }, {
             scheduled: true,
