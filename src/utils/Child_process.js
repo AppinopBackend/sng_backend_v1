@@ -913,8 +913,8 @@ process.on('message', async (message) => {
 
         // Schedule the cron job
         // cron.schedule("1 0 * * *", () => {
-            //  cron.schedule("0 * * * *", () => {
-        cron.schedule("*/50 * * * * *", () => {
+             cron.schedule("0 * * * *", () => {
+        // cron.schedule("*/50 * * * * *", () => {
             console.log('Starting....');
             logToDb('info', 'Starting....');
             task(); 
