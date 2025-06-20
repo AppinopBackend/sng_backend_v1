@@ -89,13 +89,13 @@ const directReferred = async (req, res) => {
         // Map users with additional data including staking amount
         const data = await Promise.all(users.map(async user => {
             // Find direct referrals for this user
-            const directs = await Referral.find({ sponser_id: user.user_id });
-            const directUserIds = directs.map(d => d.user_code);
+            const directs = await Referral.find({ sponser_code: user.user_id });
+            const directUserCodes = directs.map(d => d.user_code);
 
             // Sum self staking of all direct referrals (status RUNNING)
             let userDirectBusiness = 0;
-            if (directUserIds.length > 0) {
-                const directStakings = await Staking.find({ user_id: { $in: directUserIds }, status: "RUNNING" });
+            if (directUserCodes.length > 0) {
+                const directStakings = await Staking.find({ user_id: { $in: directUserCodes }, status: "RUNNING" });
                 userDirectBusiness = directStakings.reduce((sum, detail) => sum + (detail.amount || 0), 0);
             }
 
