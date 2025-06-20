@@ -495,113 +495,219 @@ process.on('message', async (message) => {
         // This will calculate daily once at 12:01 am but distributed on monthly basis
         async function carnivalRoyaltyBonus() {
             try {
-                // Fetch all staking first
-                console.log("inside carnival royalty bonus function")
-                let staking = await Staking.find({ status: 'RUNNING' });
+                // Get all users with at least 3 direct referrals
+                const users = await Users.find({ direct_referrals: { $gte: 3 } });
+                console.log(`Found ${users.length} users with at least 3 direct referrals`);
 
-                const bulkTransactions = [];
-                const bulkWallet = [];
+                // Royalty bonus tiers (staking amount : bonus)
+                const ROYALTY_TIERS = [
+                    { min: 1000, max: 1999, bonus: 10 },
+                    { min: 2000, max: 2999, bonus: 20 },
+                    { min: 3000, max: 4999, bonus: 30 },
+                    { min: 5000, max: 9999, bonus: 50 },
+                    { min: 10000, max: 19999, bonus: 100 },
+                    { min: 20000, max: 49999, bonus: 200 },
+                    { min: 50000, max: 99999, bonus: 500 },
+                    { min: 100000, max: 249999, bonus: 1100 },
+                    { min: 250000, max: 499999, bonus: 2500 },
+                    { min: 500000, max: 9999999, bonus: 5000 },
+                    { min: 10000000, max: 19999999, bonus: 8100 },
+                    { min: 20000000, max: Infinity, bonus: 15000 },
+                ];
 
-                // Fetch the user to get the activation_date
-                let user = await User.findOne({ user_id: "CARN919175" });
-                // console.log("user:", user);
-                if (!user || !user.activation_date) {
-                    console.log(`User with id CARN919175 does not have an activation_date`);
-                    return false; // Exit if user or activation_date is not found
-                }
+                for (const user of users) {
+                    console.log(`\n[Royalty] Processing user: ${user.user_id}`);
+                    // Get direct referrals
+                    const directRefs = await Referral.find({ sponser_id: user._id });
+                    console.log(`[Royalty] Direct referrals found: ${directRefs.length}`);
+                    if (directRefs.length < 3) {
+                        console.log(`[Royalty] Skipping user ${user.user_id}: Not enough directs.`);
+                        continue;
+                    }
 
-                let activationDate = new Date(user.activation_date);
-                console.log("activationDate:", activationDate);
+                    // Calculate total business for each direct referral
+                    const directRefsIncome = await Promise.all(directRefs.map(async (ref) => {
+                        const directStakingAmounts = await Staking.find({
+                            id: ref.user_id,
+                            royalty_reward_counted: false,
+                            status: "RUNNING"
+                        });
+                        const selfStaking = directStakingAmounts.reduce((sum, staking) => sum + (staking.amount || 0), 0);
+                        const { total: downlineStaking, stakingIds: downlineStakingIds } = await calculateTotalDownlineBusiness(ref.user_id, 'royalty_reward_counted');
+                        const totalBusiness = selfStaking + downlineStaking;
+                        const allStakingIds = [...directStakingAmounts.map(s => s._id), ...downlineStakingIds];
+                        console.log(`[Royalty] Direct ${ref.user_code}: Self business: ${selfStaking}, Downline business: ${downlineStaking}, Total business: ${totalBusiness}, Staking IDs: ${JSON.stringify(allStakingIds)}`);
+                        return {
+                            user_id: ref.user_code,
+                            total: totalBusiness,
+                            stakingIds: allStakingIds
+                        };
+                    }));
 
-                for await (const stake of staking) {
-                    // find upline for this single user to distribute level bonus
-                    let upline = await ReferralController.getUplineTeam(stake.id)
-                    console.log(upline, "DATA OF UPLINE IN ROYALITY BONUS");
-                    if (upline.length > 0) {
-                        for await (const up of upline) {
-                            // check last transaction date;
-                            let last = await Transaction.find(
-                                {
-                                    $and: [
-                                        { id: stake.id },
-                                        { staking_id: stake._id },
-                                        { transaction_type: 'CARNIVAL ROYALTY BONUS' }
-                                    ]
-                                }
-                            ).sort({ createdAt: -1 }).limit(1);
-                            console.log(last, " : last")
+                    // Sort directs by total business
+                    const sortedDirects = [...directRefsIncome].sort((a, b) => b.total - a.total);
+                    const highest = sortedDirects[0] || { total: 0, user_id: null };
+                    const secondHighest = sortedDirects[1] || { total: 0, user_id: null };
+                    const others = sortedDirects.slice(2);
+                    const othersSum = others.reduce((sum, ref) => sum + ref.total, 0);
+                    const othersIds = others.map(ref => ref.user_id);
+                    console.log(`[Royalty] Highest: ${highest.total} (User: ${highest.user_id}), 2nd Highest: ${secondHighest.total} (User: ${secondHighest.user_id}), Others Total: ${othersSum} (Users: ${othersIds})`);
 
+                    // Get previous remaining amounts
+                    const highestTeamRemaining = user.royalty_highest_team_remaining_business || 0;
+                    const secondHighestTeamRemaining = user.royalty_second_highest_team_remaining_business || 0;
+                    const otherTeamRemaining = user.royalty_other_team_remaining_business || 0;
 
-                            let referenceDate;
-                            if (last.length > 0) {
-                                referenceDate = new Date(last[0].createdAt);
-                            } else {
-                                referenceDate = activationDate;
+                    // Calculate business for this cycle
+                    const highestTeamBusiness = highest.total * 0.5 + highestTeamRemaining;
+                    const secondHighestTeamBusiness = secondHighest.total * 0.3 + secondHighestTeamRemaining;
+                    const otherTeamBusiness = othersSum * 0.2 + otherTeamRemaining;
+                    console.log(`[Royalty] Business: HighestTeam ${highestTeamBusiness} (remaining: ${highestTeamRemaining}), 2ndHighestTeam ${secondHighestTeamBusiness} (remaining: ${secondHighestTeamRemaining}), OtherTeam ${otherTeamBusiness} (remaining: ${otherTeamRemaining})`);
+
+                    // Find the highest royalty tier the user qualifies for
+                    let applicableTier = null;
+                    for (const tier of ROYALTY_TIERS.slice().reverse()) {
+                        const reqHighest = tier.min * 0.5;
+                        const reqSecond = tier.min * 0.3;
+                        const reqOther = tier.min * 0.2;
+                        console.log(`[Royalty] Checking tier ${tier.min}-${tier.max}: Required Highest: ${reqHighest}, 2nd: ${reqSecond}, Other: ${reqOther}`);
+                        if (
+                            highestTeamBusiness >= reqHighest &&
+                            secondHighestTeamBusiness >= reqSecond &&
+                            otherTeamBusiness >= reqOther
+                        ) {
+                            applicableTier = tier;
+                            console.log(`[Royalty] User ${user.user_id} qualifies for tier: ${tier.min}-${tier.max} (bonus: ${tier.bonus})`);
+                            break;
+                        }
+                    }
+                    if (!applicableTier) {
+                        console.log(`[Royalty] User ${user.user_id} does not qualify for any tier.`);
+                    }
+
+                    // Get user's current royalty bonus period info
+                    const now = new Date();
+                    let startDate = user.royalty_bonus_start_date;
+                    let endDate = user.royalty_bonus_end_date;
+                    let currentTier = user.royalty_bonus_current_tier;
+
+                    // If user qualifies for a new (higher) tier, or never had a period, start new 10-week period
+                    let shouldStartNewPeriod = false;
+                    if (applicableTier) {
+                        if (!currentTier || !startDate || !endDate) {
+                            shouldStartNewPeriod = true;
+                        } else {
+                            const currentTierObj = ROYALTY_TIERS.find(t => `${t.min}-${t.max}` === currentTier);
+                            if (!currentTierObj || applicableTier.min > currentTierObj.min) {
+                                shouldStartNewPeriod = true;
                             }
-                            console.log("referenceDate:", referenceDate);
+                        }
+                    }
 
-                            let currentDate = new Date();
-                            let diffInMilliseconds = currentDate - referenceDate;
-                            let diffInDays = diffInMilliseconds / (1000 * 60 * 60 * 24);
-                            console.log("diffInDays:", diffInDays);
+                    if (shouldStartNewPeriod) {
+                        startDate = now;
+                        endDate = new Date(now.getTime() + 10 * 7 * 24 * 60 * 60 * 1000); // 10 weeks from now
+                        currentTier = `${applicableTier.min}-${applicableTier.max}`;
+                        await Users.findByIdAndUpdate(user._id, {
+                            royalty_bonus_start_date: startDate,
+                            royalty_bonus_end_date: endDate,
+                            royalty_bonus_current_tier: currentTier
+                        });
+                        console.log(`[Royalty] Started new 10-week period for user ${user.user_id} at tier ${currentTier}. Start: ${startDate}, End: ${endDate}`);
+                    }
 
-                            if (diffInDays >= 30) {
-                                let royalty_bonus;
-                                if (up.level === 1) {
-                                    royalty_bonus = stake.amount * 2 / 100;
-                                } else if (up.level === 2) {
-                                    royalty_bonus = stake.amount * 1 / 100;
-                                } else if (up.level === 3) {
-                                    royalty_bonus = stake.amount * 0.5 / 100;
-                                } else if (up.level === 4) {
-                                    royalty_bonus = stake.amount * 0.25 / 100;
-                                } else if (up.level >= 5 && up.level <= 10) {
-                                    royalty_bonus = stake.amount * 0.20 / 100;
-                                } else if (up.level >= 11 && up.level <= 20) {
-                                    royalty_bonus = stake.amount * 0.15 / 100;
-                                } else if (up.level >= 21 && up.level <= 30) {
-                                    royalty_bonus = stake.amount * 0.10 / 100;
-                                } else {
-                                    console.log(up.level);
-                                    continue;
+                    // Only pay if user is in a valid period and it's a weekly payout
+                    if (currentTier && startDate && endDate && now >= startDate && now <= endDate) {
+                        // Check if it's time for a weekly payout
+                        const lastTx = await Transaction.findOne({
+                            user_id: user.user_id,
+                            transaction_type: 'CARNIVAL ROYALTY BONUS',
+                            'metadata.royalty_tier': currentTier
+                        }).sort({ createdAt: -1 });
+                        let lastPaidDate = lastTx ? lastTx.createdAt : startDate;
+                        let daysSinceLast = (now - new Date(lastPaidDate)) / (1000 * 60 * 60 * 24);
+                        const weekNum = Math.floor((now - new Date(startDate)) / (7 * 24 * 60 * 60 * 1000)) + 1;
+                        console.log(`[Royalty] Week: ${weekNum}, Last paid: ${lastPaidDate}, Days since last: ${daysSinceLast}`);
+                        if ((daysSinceLast >= 7 || !lastTx) && applicableTier) {
+                            // Calculate new remaining business
+                            const tier50 = applicableTier.min * 0.5;
+                            const tier30 = applicableTier.min * 0.3;
+                            const tier20 = applicableTier.min * 0.2;
+                            const newHighestRemaining = Math.max(0, highestTeamBusiness - tier50);
+                            const newSecondHighestRemaining = Math.max(0, secondHighestTeamBusiness - tier30);
+                            const newOtherRemaining = Math.max(0, otherTeamBusiness - tier20);
+                            let allRoyaltyStakingIds = [];
+                            directRefsIncome.forEach(ref => {
+                                allRoyaltyStakingIds.push(...ref.stakingIds);
+                            });
+                            console.log(`[Royalty] Paying week ${weekNum} bonus to user ${user.user_id}: ${applicableTier.bonus} USDT for tier ${currentTier}`);
+                            console.log(`[Royalty] Staking IDs used for payout: ${JSON.stringify(allRoyaltyStakingIds)}`);
+                            await Transaction.create({
+                                id: user.user_id,
+                                user_id: user.user_id,
+                                transaction_type: 'CARNIVAL ROYALTY BONUS',
+                                income_type: 'sng_royalty',
+                                amount: applicableTier.bonus,
+                                staking_id: null,
+                                from: null,
+                                rank_achieved: `Royalty Tier ${applicableTier.min}-${applicableTier.max}`,
+                                currency: 'USDT',
+                                self: applicableTier.bonus,
+                                total: applicableTier.bonus,
+                                status: 'COMPLETE',
+                                package_name: `Royalty Tier ${applicableTier.min}-${applicableTier.max}`,
+                                package_amount: applicableTier.bonus,
+                                description: `Royalty bonus for business: Highest(${highestTeamBusiness}), 2ndHighest(${secondHighestTeamBusiness}), Other(${otherTeamBusiness})`,
+                                metadata: {
+                                    royalty_tier: `${applicableTier.min}-${applicableTier.max}`,
+                                    highest_team_business: highestTeamBusiness,
+                                    second_highest_team_business: secondHighestTeamBusiness,
+                                    other_team_business: otherTeamBusiness,
+                                    new_highest_remaining: newHighestRemaining,
+                                    new_second_highest_remaining: newSecondHighestRemaining,
+                                    new_other_remaining: newOtherRemaining,
+                                    royalty_bonus_week: weekNum,
+                                    used_staking_ids: allRoyaltyStakingIds
                                 }
-
-                                bulkWallet.push({
-                                    updateOne: {
-                                        filter: { user_id: up.user_id },
-                                        update: { $inc: { balance: royalty_bonus } }
+                            });
+                            await Users.findByIdAndUpdate(user._id, {
+                                royalty_highest_team_remaining_business: newHighestRemaining,
+                                royalty_second_highest_team_remaining_business: newSecondHighestRemaining,
+                                royalty_other_team_remaining_business: newOtherRemaining
+                            });
+                            console.log(`[Royalty] Updated user ${user.user_id} remaining business: Highest ${newHighestRemaining}, 2ndHighest ${newSecondHighestRemaining}, Other ${newOtherRemaining}`);
+                            if (allRoyaltyStakingIds.length > 0) {
+                                await Staking.updateMany(
+                                    {
+                                        _id: { $in: allRoyaltyStakingIds },
+                                        royalty_reward_counted: false,
+                                        status: "RUNNING"
+                                    },
+                                    {
+                                        $set: { royalty_reward_counted: true }
                                     }
-                                })
-
-                                bulkTransactions.push({
-                                    user_id: up.user_id,
-                                    id: stake.id,
-                                    amount: royalty_bonus,
-                                    staking_id: stake._id,
-                                    currency: stake.currency,
-                                    transaction_type: 'CARNIVAL ROYALTY BONUS',
-                                    status: "COMPLETE",
-                                    from: stake.user_id,
-                                    package_name: stake.rank,
-                                    package_amount: stake.amount
-                                })
+                                );
+                                console.log(`[Royalty] Marked ${allRoyaltyStakingIds.length} staking records as royalty_reward_counted.`);
                             }
+                        } else if (daysSinceLast >= 7 || !lastTx) {
+                            console.log(`[Royalty] Skipping payout for user ${user.user_id} this week: No applicable tier.`);
+                        }
+                    } else {
+                        if (!currentTier || !startDate || !endDate) {
+                            console.log(`[Royalty] User ${user.user_id} not in a valid royalty period.`);
+                        } else if (now > endDate) {
+                            console.log(`[Royalty] User ${user.user_id} royalty period ended on ${endDate}. No more payouts.`);
+                        } else {
+                            console.log(`[Royalty] User ${user.user_id} not eligible for payout at this time.`);
                         }
                     }
                 }
 
-                // Insert transactions in bulk
-                if (bulkTransactions.length > 0) {
-                    await Transaction.insertMany(bulkTransactions);
-                }
-
-                if (bulkWallet.length > 0) {
-                    await Wallets.bulkWrite(bulkWallet)
-                }
-                console.log('carnivalRoyaltyBonus DONE')
-                return true
+                console.log('Carnival Royalty Bonus distribution completed');
+                return true;
             } catch (error) {
-                console.log(error, " : error in carnival royalty bonus")
+                console.error('Error in carnivalRoyaltyBonus:', error);
+                throw error;
             }
         }
 
@@ -620,7 +726,7 @@ process.on('message', async (message) => {
         };
 
         // Function to calculate total downline business recursively
-        const calculateTotalDownlineBusiness = async (userId) => {
+        const calculateTotalDownlineBusiness = async (userId, countedKey = 'rank_reward_counted') => {
             // Get all direct referrals of this user
             const downlines = await Referral.find({ sponser_id: userId });
             
@@ -630,11 +736,12 @@ process.on('message', async (message) => {
             // For each downline
             for (const downline of downlines) {
                 // Get their staking amounts that haven't been counted
-                const stakingAmounts = await Staking.find({
+                const stakingQuery = {
                     id: downline.user_id,
-                    rank_reward_counted: false,
                     status: "RUNNING"
-                });
+                };
+                stakingQuery[countedKey] = false;
+                const stakingAmounts = await Staking.find(stakingQuery);
                 
                 // Add their staking to total
                 const downlineStaking = stakingAmounts.reduce((sum, staking) => sum + (staking.amount || 0), 0);
@@ -644,7 +751,7 @@ process.on('message', async (message) => {
                 countedStakingIds = [...countedStakingIds, ...stakingAmounts.map(stake => stake._id)];
                 
                 // Recursively get their downline business
-                const { total: nestedTotal, stakingIds: nestedStakingIds } = await calculateTotalDownlineBusiness(downline.user_id);
+                const { total: nestedTotal, stakingIds: nestedStakingIds } = await calculateTotalDownlineBusiness(downline.user_id, countedKey);
                 totalDownlineBusiness += nestedTotal;
                 countedStakingIds = [...countedStakingIds, ...nestedStakingIds];
             }
@@ -691,7 +798,7 @@ process.on('message', async (message) => {
                         const selfStaking = directStakingAmounts.reduce((sum, staking) => sum + (staking.amount || 0), 0);
                         
                         // Get only uncounted staking amounts for downline
-                        const { total: downlineStaking, stakingIds: downlineStakingIds } = await calculateTotalDownlineBusiness(ref.user_id);
+                        const { total: downlineStaking, stakingIds: downlineStakingIds } = await calculateTotalDownlineBusiness(ref.user_id, 'rank_reward_counted');
                         const total = selfStaking + downlineStaking;
 
                         console.log(`\n=== Business Summary for User ${ref.user_code} ===`);
@@ -899,25 +1006,150 @@ process.on('message', async (message) => {
             }
         }
 
+        async function boosterincome(){
+            try {
+                console.log("\n=== Booster Income Function Start ===");
+                // Find all RUNNING stakings (no date filter)
+                const stakings = await Staking.find({ status: 'RUNNING' });
+                let totalProcessed = 0, totalBoosted = 0, totalReverted = 0;
+                for (const staking of stakings) {
+                    console.log(staking)
+                    const user = await Users.findOne({ user_id: staking.user_id });
+                    if (!user) continue;
+                    totalProcessed++;
+                    const stakingWindowEnd = new Date(staking.createdAt.getTime() + 15 * 24 * 60 * 60 * 1000);
+                    console.log(`\n[PROCESS] Main User: ${user.user_id}, StakingID: ${staking._id}, Amount: ${staking.amount}, Created: ${staking.createdAt.toISOString()}, WindowEnd: ${stakingWindowEnd.toISOString()}`);
+                    const directRefs = await Referral.find({ sponser_id: user._id });
+                    console.log(`[INFO] Found ${directRefs.length} direct referrals for user ${user.user_id}`);
+                    if (!directRefs || directRefs.length < 5) {
+                        if (staking.booster_applicable) {
+                            await Staking.findOneAndUpdate(
+                                { _id: staking._id },
+                                { $set: { roi: staking.previous_roi || staking.roi, booster_applicable: false, previous_roi: null } }
+                            );
+                            await logRewardUser({
+                                user_id: user.user_id,
+                                user_code: user.user_id,
+                                type: 'booster_revert',
+                                details: {
+                                    message: 'Booster ROI reverted (not enough directs)',
+                                    staking_id: staking._id,
+                                    reverted_to: staking.previous_roi || staking.roi
+                                }
+                            });
+                            totalReverted++;
+                            console.log(`[REVERT] Booster ROI reverted for staking ${staking._id} of user ${user.user_id} (not enough directs)`);
+                        }
+                        continue;
+                    }
+                    let qualifyingDirects = 0;
+                    for (const ref of directRefs) {
+                        // Debug: print all stakings for this direct user
+                        const allDirectStakings = await Staking.find({ user_id: ref.user_code });
+                        console.log(`[DEBUG] All stakings for direct user ${ref.user_code}:`, allDirectStakings.map(ds => ({ status: ds.status, amount: ds.amount, createdAt: ds.createdAt })));
+                        // Direct's staking must be RUNNING, amount >= main staking, created within 15 days of main staking
+                        const directStaking = await Staking.findOne({
+                            user_id: ref.user_code,
+                            status: 'RUNNING',
+                            amount: { $gte: staking.amount },
+                            createdAt: { $gte: staking.createdAt, $lte: stakingWindowEnd }
+                        });
+                        if (directStaking) {
+                            qualifyingDirects++;
+                            console.log(`[QUALIFY] Direct user ${ref.user_code} qualifies (staking: ${directStaking.amount}, created: ${directStaking.createdAt.toISOString()}) for main staking ${staking._id}`);
+                        } else {
+                            // Log why not qualified
+                            if (allDirectStakings.length === 0) {
+                                console.log(`[NO-QUALIFY] Direct user ${ref.user_code} has no staking.`);
+                            } else {
+                                let reason = [];
+                                for (const ds of allDirectStakings) {
+                                    if (ds.status !== 'RUNNING') reason.push(`status ${ds.status} != RUNNING`);
+                                    if (ds.amount < staking.amount) reason.push(`amount ${ds.amount} < main ${staking.amount}`);
+                                    if (ds.createdAt < staking.createdAt) reason.push(`createdAt ${ds.createdAt.toISOString()} < main staking ${staking.createdAt.toISOString()}`);
+                                    if (ds.createdAt > stakingWindowEnd) reason.push(`createdAt ${ds.createdAt.toISOString()} > windowEnd ${stakingWindowEnd.toISOString()}`);
+                                }
+                                console.log(`[NO-QUALIFY] Direct user ${ref.user_code} does NOT qualify for main staking ${staking._id}. Reasons: ${reason.join('; ')}`);
+                            }
+                        }
+                        if (qualifyingDirects >= 5) break;
+                    }
+                    if (qualifyingDirects >= 5) {
+                        if (!staking.booster_applicable && staking.roi !== 1) {
+                            await Staking.findOneAndUpdate(
+                                { _id: staking._id },
+                                { $set: { previous_roi: staking.roi, roi: 1, booster_applicable: true } }
+                            );
+                            await logRewardUser({
+                                user_id: user.user_id,
+                                user_code: user.user_id,
+                                type: 'booster',
+                                details: {
+                                    message: 'Booster ROI applied',
+                                    staking_id: staking._id,
+                                    old_roi: staking.roi,
+                                    new_roi: 1,
+                                    qualifyingDirects
+                                }
+                            });
+                            totalBoosted++;
+                            console.log(`[BOOST] Booster ROI applied for staking ${staking._id} of user ${user.user_id}`);
+                        } else {
+                            console.log(`[INFO] Staking ${staking._id} of user ${user.user_id} already boosted or ROI is already 1%`);
+                        }
+                    } else {
+                        if (staking.booster_applicable) {
+                            await Staking.findOneAndUpdate(
+                                { _id: staking._id },
+                                { $set: { roi: staking.previous_roi || staking.roi, booster_applicable: false, previous_roi: null } }
+                            );
+                            await logRewardUser({
+                                user_id: user.user_id,
+                                user_code: user.user_id,
+                                type: 'booster_revert',
+                                details: {
+                                    message: 'Booster ROI reverted (lost eligibility)',
+                                    staking_id: staking._id,
+                                    reverted_to: staking.previous_roi || staking.roi
+                                }
+                            });
+                            totalReverted++;
+                            console.log(`[REVERT] Booster ROI reverted for staking ${staking._id} of user ${user.user_id} (lost eligibility)`);
+                        } else {
+                            console.log(`[INFO] Staking ${staking._id} of user ${user.user_id} does not qualify for booster (only ${qualifyingDirects} qualifying directs)`);
+                        }
+                    }
+                }
+                console.log(`\n=== Booster Income Function End ===`);
+                console.log(`[SUMMARY] Processed: ${totalProcessed}, Boosted: ${totalBoosted}, Reverted: ${totalReverted}`);
+            } catch (error) {
+                console.error("Error in booster income function:", error);
+                throw error;
+            }
+        }
+
         //Cron Configurations
         // Function to run at 12:01 AM IST
         const task = async () => {
             console.log(`Cron job executed at ${moment().tz('Asia/Kolkata').format()}`);
 
             // Add your task logic here
-            await superBonus();
+            // await superBonus();
             // await carnivalRoyaltyBonus();
             // await carnivalCorporateToken();
-            await carnivalRankRewards();
+            // await carnivalRankRewards();
+            // await boosterincome()
         };
 
         // Schedule the cron job
         // cron.schedule("1 0 * * *", () => {
-             cron.schedule("0 * * * *", () => {
+            //  cron.schedule("0 * * * *", () => {
         // cron.schedule("*/50 * * * * *", () => {
+            //  cron.schedule("0 * * * *", () => {
+        cron.schedule("*/30 * * * * *", () => {
             console.log('Starting....');
             logToDb('info', 'Starting....');
-            task(); 
+            // task(); 
         }, {
             scheduled: true,
             timezone: "Asia/Kolkata"
@@ -934,7 +1166,7 @@ process.on('message', async (message) => {
     } catch (error) {
         console.log(error.message, " : Some error occured in child process function")
     }
-})
+});
 
 process.on('disconnect', async () => {
     console.log('Child process is disconnected. Exiting...');

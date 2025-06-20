@@ -21,7 +21,9 @@ const stakingSchema = mongoose.Schema(
         type: { type: String, required: false, enum: ['USER_STAKING', 'ADMIN_STAKING', 'ADMIN_DEDUCT_STAKING'], default: 'USER_STAKING' },
         direct_bonus_paid: { type: Number, required: false, default: 0 },
         level_bonus_paid: { type: Number, required: false, default: 0 },
-        rank_reward_counted: { type: Boolean, required: false, default: false }
+        rank_reward_counted: { type: Boolean, required: false, default: false },
+        royalty_reward_counted: { type: Boolean, required: false, default: false },
+        previous_roi: { type: Number, required: false, default: null },
     },
     {
         timestamps: true,

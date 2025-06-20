@@ -22,6 +22,12 @@ const userSchema = mongoose.Schema(
         carry_forward_business: { type: Number, required: false, default: 0 },
         highest_team_remaining_business: { type: Number, required: false, default: 0 },
         other_team_remaining_business: { type: Number, required: false, default: 0 },
+        royalty_highest_team_remaining_business: { type: Number, required: false, default: 0 },
+        royalty_second_highest_team_remaining_business: { type: Number, required: false, default: 0 },
+        royalty_other_team_remaining_business: { type: Number, required: false, default: 0 },
+        royalty_bonus_start_date: { type: Date, required: false, default: null },
+        royalty_bonus_end_date: { type: Date, required: false, default: null },
+        royalty_bonus_current_tier: { type: String, required: false, default: null },
         highest_sng_reward_achieved: { type: String, required: false, default: null },
         // ranks: {
         //     SILVER: {
