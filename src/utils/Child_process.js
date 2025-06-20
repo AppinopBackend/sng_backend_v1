@@ -515,6 +515,8 @@ process.on('message', async (message) => {
                     { min: 20000000, max: Infinity, bonus: 15000 },
                 ];
 
+                let allRoyaltyStakingIds = [];
+
                 for (const user of users) {
                     console.log(`\n[Royalty] Processing user: ${user.user_id}`);
                     // Get direct referrals
@@ -636,12 +638,12 @@ process.on('message', async (message) => {
                             const newHighestRemaining = Math.max(0, highestTeamBusiness - tier50);
                             const newSecondHighestRemaining = Math.max(0, secondHighestTeamBusiness - tier30);
                             const newOtherRemaining = Math.max(0, otherTeamBusiness - tier20);
-                            let allRoyaltyStakingIds = [];
+                            let userRoyaltyStakingIds = [];
                             directRefsIncome.forEach(ref => {
-                                allRoyaltyStakingIds.push(...ref.stakingIds);
+                                userRoyaltyStakingIds.push(...ref.stakingIds);
                             });
                             console.log(`[Royalty] Paying week ${weekNum} bonus to user ${user.user_id}: ${applicableTier.bonus} USDT for tier ${currentTier}`);
-                            console.log(`[Royalty] Staking IDs used for payout: ${JSON.stringify(allRoyaltyStakingIds)}`);
+                            console.log(`[Royalty] Staking IDs used for payout: ${JSON.stringify(userRoyaltyStakingIds)}`);
                             await Transaction.create({
                                 id: user.user_id,
                                 user_id: user.user_id,
@@ -667,7 +669,7 @@ process.on('message', async (message) => {
                                     new_second_highest_remaining: newSecondHighestRemaining,
                                     new_other_remaining: newOtherRemaining,
                                     royalty_bonus_week: weekNum,
-                                    used_staking_ids: allRoyaltyStakingIds
+                                    used_staking_ids: userRoyaltyStakingIds
                                 }
                             });
                             await Users.findByIdAndUpdate(user._id, {
@@ -676,18 +678,8 @@ process.on('message', async (message) => {
                                 royalty_other_team_remaining_business: newOtherRemaining
                             });
                             console.log(`[Royalty] Updated user ${user.user_id} remaining business: Highest ${newHighestRemaining}, 2ndHighest ${newSecondHighestRemaining}, Other ${newOtherRemaining}`);
-                            if (allRoyaltyStakingIds.length > 0) {
-                                await Staking.updateMany(
-                                    {
-                                        _id: { $in: allRoyaltyStakingIds },
-                                        royalty_reward_counted: false,
-                                        status: "RUNNING"
-                                    },
-                                    {
-                                        $set: { royalty_reward_counted: true }
-                                    }
-                                );
-                                console.log(`[Royalty] Marked ${allRoyaltyStakingIds.length} staking records as royalty_reward_counted.`);
+                            if (userRoyaltyStakingIds.length > 0) {
+                                allRoyaltyStakingIds.push(...userRoyaltyStakingIds);
                             }
                         } else if (daysSinceLast >= 7 || !lastTx) {
                             console.log(`[Royalty] Skipping payout for user ${user.user_id} this week: No applicable tier.`);
@@ -703,6 +695,20 @@ process.on('message', async (message) => {
                     }
                 }
 
+                // After all users are processed, update all used staking IDs in one bulk operation
+                if (allRoyaltyStakingIds.length > 0) {
+                    await Staking.updateMany(
+                        {
+                            _id: { $in: allRoyaltyStakingIds },
+                            royalty_reward_counted: false,
+                            status: "RUNNING"
+                        },
+                        {
+                            $set: { royalty_reward_counted: true }
+                        }
+                    );
+                    console.log(`[Royalty] Marked ${allRoyaltyStakingIds.length} staking records as royalty_reward_counted (bulk update after all users).`);
+                }
                 console.log('Carnival Royalty Bonus distribution completed');
                 return true;
             } catch (error) {
@@ -1135,7 +1141,7 @@ process.on('message', async (message) => {
 
             // Add your task logic here
             // await superBonus();
-            // await carnivalRoyaltyBonus();
+            await carnivalRoyaltyBonus();
             // await carnivalCorporateToken();
             // await carnivalRankRewards();
             // await boosterincome()
@@ -1149,7 +1155,7 @@ process.on('message', async (message) => {
         cron.schedule("*/30 * * * * *", () => {
             console.log('Starting....');
             logToDb('info', 'Starting....');
-            // task(); 
+            task(); 
         }, {
             scheduled: true,
             timezone: "Asia/Kolkata"
