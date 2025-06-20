@@ -677,6 +677,9 @@ module.exports = {
         try {
             const { user_id, amount } = req.body;
 
+            // Define rank hierarchy
+            const rankOrder = ["SILVER", "GOLD", "PLATINUM", "DIAMOND", "CROWN"];
+
             // Check if the amount is greater than or equal to 100
             if (amount < 100) return res.status(400).json({ success: false, message: "Staking amount must be greater than 100", data: [] });
 
@@ -732,13 +735,17 @@ module.exports = {
             };
             let stake = await Staking.create(obj);
 
-            // Update user's self-staking status
+            // Update user's self-staking status and rank if new rank is higher
             let updateFields = {
                 staking_status: 'ACTIVE',
-                current_rank: rank,
-                total_earning_potential: direct?.length > 0 ? 300 : 200,
                 self_staking: staking_value
             };
+            // Only update rank if new rank is higher
+            const currentRank = user.current_rank;
+            if (!currentRank || rankOrder.indexOf(rank) > rankOrder.indexOf(currentRank)) {
+                updateFields.current_rank = rank;
+            }
+            updateFields.total_earning_potential = direct?.length > 0 ? 300 : 200;
             if (isFirstStaking) {
                 updateFields.activation_date = new Date();
             }

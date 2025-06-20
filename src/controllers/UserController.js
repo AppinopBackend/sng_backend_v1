@@ -210,24 +210,14 @@ module.exports = {
                 staking_status: 'INACTIVE'
             });
 
-            // Calculate total_direct_business (sum of direct bonus earnings)
-            const directBonus = await Transaction.aggregate([
-                {
-                    $match: {
-                        $and: [
-                            { user_id: user_id },
-                            { income_type: 'sng_direct_referral' }
-                        ]
-                    }
-                },
-                {
-                    $group: {
-                        _id: null,
-                        total: { $sum: "$amount" }
-                    }
-                }
-            ]);
-            const total_direct_business = directBonus.length > 0 ? directBonus[0].total : 0;
+            // Calculate total_direct_business (sum of self staking of all direct referrals)
+            const directs = await Referral.find({ sponser_id: user_id });
+            const directUserIds = directs.map(d => d.user_id);
+            let total_direct_business = 0;
+            if (directUserIds.length > 0) {
+                const directStakings = await Staking.find({ user_id: { $in: directUserIds }, status: "RUNNING" });
+                total_direct_business = directStakings.reduce((sum, detail) => sum + (detail.amount || 0), 0);
+            }
 
             data.sponser_code = parentId?.sponser_code ? parentId?.sponser_code : ""
             data.self_business = selfbusiness

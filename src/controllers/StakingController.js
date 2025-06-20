@@ -10,6 +10,8 @@ const User = require("../models/User");
 module.exports = {
     buyPackage: async (req, res) => {
         try {
+            const rankOrder = ["SILVER", "GOLD", "PLATINUM", "DIAMOND", "CROWN"];
+
             const { user_id, id } = req.user;
             const { amount, bsc_address } = req.body;
 
@@ -84,11 +86,15 @@ module.exports = {
                 // Update user's self-staking status
                 let updateFields = {
                     staking_status: "ACTIVE",
-                    current_rank: rank,
                     total_earning_potential: direct?.length > 0 ? 300 : 200,
                     self_staking: staking_value,
                     bsc_address: bsc_address,
                 };
+                // Only update rank if new rank is higher
+                const currentRank = user.current_rank;
+                if (!currentRank || rankOrder.indexOf(rank) > rankOrder.indexOf(currentRank)) {
+                    updateFields.current_rank = rank;
+                }
                 if (isFirstStaking) {
                     updateFields.activation_date = new Date().toISOString();
                 }
