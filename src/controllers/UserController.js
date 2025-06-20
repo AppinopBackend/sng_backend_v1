@@ -184,7 +184,7 @@ module.exports = {
 
             while (team.length > 0) {
                 const current = team.shift();
-                const direct = await Referral.find({ sponser_id: current.userId }).lean();
+                const direct = await Referral.find({ sponser_code: current.userId }).lean();
 
                 if (direct.length > 0) {
                     const levelMembers = direct.map(member => ({
@@ -209,10 +209,10 @@ module.exports = {
                 _id: { $in: memberIds },
                 staking_status: 'INACTIVE'
             });
-
+            
             // Calculate total_direct_business (sum of self staking of all direct referrals)
-            const directs = await Referral.find({ sponser_id: user_id });
-            const directUserIds = directs.map(d => d.user_id);
+            const directs = await Referral.find({ sponser_code: user_id });
+            const directUserIds = directs.map(d => d.user_code);
             let total_direct_business = 0;
             if (directUserIds.length > 0) {
                 const directStakings = await Staking.find({ user_id: { $in: directUserIds }, status: "RUNNING" });
