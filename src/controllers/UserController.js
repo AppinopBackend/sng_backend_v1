@@ -184,8 +184,7 @@ module.exports = {
 
             while (team.length > 0) {
                 const current = team.shift();
-                const direct = await Referral.find({ sponser_code: current.userId }).lean();
-
+                const direct = await Referral.find({ sponser_id: current.userId }).lean();
                 if (direct.length > 0) {
                     const levelMembers = direct.map(member => ({
                         userId: member.user_id,
@@ -196,10 +195,8 @@ module.exports = {
                     allMembers.push(...levelMembers);
                 }
             }
-
             // Get user IDs from all members
             const memberIds = allMembers.map(member => member.userId);
-
             // Count active and inactive users
             const activeUsers = await Users.countDocuments({ 
                 _id: { $in: memberIds },
