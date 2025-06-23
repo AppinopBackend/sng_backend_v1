@@ -216,6 +216,10 @@ module.exports = {
                 total_direct_business = directStakings.reduce((sum, detail) => sum + (detail.amount || 0), 0);
             }
 
+            // Fetch last staking data for this user
+            const lastStaking = await Staking.findOne({ user_id: user_id }).sort({ createdAt: -1 });
+            data.last_staking_roi = lastStaking ? lastStaking.roi : 0;
+
             data.sponser_code = parentId?.sponser_code ? parentId?.sponser_code : ""
             data.self_business = selfbusiness
             data.id = id
@@ -427,6 +431,9 @@ module.exports = {
             const total3Xamount = data.self_topup * 3
             data.total2xPendingQuantity = total2Xamount - (selfbusiness.length > 0 ? selfbusiness[0].totalPaidAmount : 0)
             data.total3xPendingQuantity = total3Xamount - (selfbusiness.length > 0 ? selfbusiness[0].totalPaidAmount : 0)
+            // Ensure no negative values
+            if (data.total2xPendingQuantity < 0) data.total2xPendingQuantity = 0;
+            if (data.total3xPendingQuantity < 0) data.total3xPendingQuantity = 0;
 
             // if found staking then set staking status to active
             if (selfbusiness.length > 0) {

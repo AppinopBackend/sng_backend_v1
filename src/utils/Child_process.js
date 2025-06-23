@@ -31,30 +31,30 @@ process.on('message', async (message) => {
         async function superBonus() {
             try {
                 console.log("inside super bonus function")
-                // Fetch all staking first
-                let staking = await Staking.find({ status: 'RUNNING'  /*user_id: '424772' */ })
-
+        
+                let staking = await Staking.find({ status: 'RUNNING', })
+                console.log(`Total running stakings found: ${staking.length}`);
+        
                 const bulkStak = [];
                 const bulkTransactions = [];
                 const bulkWallet = [];
+        
                 for (const stake of staking) {
-                    console.log(stake, "Log of Single Stake");
-
+                    console.log(`Processing stake for user_id: ${stake.user_id}, stake_id: ${stake._id}`);
                     let totalpaid = (stake.paid + stake.amount);
-                    console.log(totalpaid, " : Total Paid Value");
+                    console.log(`Total paid so far (including principal): ${totalpaid}, Total target: ${stake.total}`);
+        
                     if (totalpaid < stake.total) {
-                        // Calculate interest
                         let interest = stake.amount * stake.roi / 100;
-                        console.log(interest, "interest");
-                        // store all staking related operation in bulkOps
+                        console.log(`Interest calculated: ${interest}`);
+        
                         bulkStak.push({
                             updateOne: {
                                 filter: { _id: stake._id },
                                 update: { $inc: { paid: interest, roi_paid: interest } }
                             }
-                        })
-
-                        // store all transaction in transaction array
+                        });
+        
                         bulkTransactions.push({
                             user_id: stake.user_id,
                             id: stake.id,
@@ -66,16 +66,15 @@ process.on('message', async (message) => {
                             status: "COMPLETE",
                             package_amount: stake.amount,
                             description: `Daily ROI income of ${interest} ${stake.currency} credited for staking amount ${stake.amount} at ROI ${stake.roi}%`
-                        })
-
+                        });
+        
                         bulkWallet.push({
                             updateOne: {
                                 filter: { user_id: stake.user_id },
                                 update: { $inc: { usdt_balance: interest } }
                             }
-                        })
-
-                        // ROI (super bonus) logging
+                        });
+        
                         await logRewardUser({
                             user_id: stake.user_id,
                             user_code: stake.user_code || '',
@@ -89,152 +88,122 @@ process.on('message', async (message) => {
                                 description: `Daily ROI income of ${interest} ${stake.currency} credited for staking amount ${stake.amount} at ROI ${stake.roi}%`
                             }
                         });
-
-                        //SNG LEVEL BONUS
-                        // find upline for this single user to distribute level bonus
-                        let upline = await ReferralController.getUplineTeam(stake.id); // Closest first
-                        let direct = await Referral.find({ sponser_id: stake.id });
-                        let direct_count = direct.length
-                        // Only the closest 15 uplines are eligible
-                        if (upline.length > 15) {
-                            upline = upline.slice(0, 15); // Keep only the closest 15 uplines
-                        }
-                        for (let i = 0; i < upline.length; i++) {
-                            const up = upline[i];
-                            // Check if this upline user has required number of directs based on their level
-                            let upDirects = await Referral.find({ sponser_code: up.user_id });
-                            console.log(upDirects, ">>>>>>>>>>>UPDIRECTS")
+        
+                        let downline = await ReferralController.getNewDownlineTeam(stake.id);
+                        console.log(`Total downline users found for user_id ${stake.user_id}: ${downline.length}`);
+        
+                        for (let i = 0; i < downline.length; i++) {
+                            const down = downline[i];
+                            console.log(`Checking downline level ${down.level} for user_id: ${down.user_id}`);
+                            let stakerDirects = await Referral.find({ sponser_code: stake.user_id });
+                            console.log(`Staker ${stake.user_id} has ${stakerDirects.length} directs. Checking eligibility for level ${down.level}.`);
                             let hasRequiredDirects = false;
                             let level_bonus;
-                            console.log(hasRequiredDirects, ">>>>>>>>>>>>>>>>>>>>>>>>>>>True OR false")
-                            // Check if user meets the minimum direct requirement for their level
-                            if (up.level === 1 && upDirects.length >= 1) {
+                            if (down.level === 1 && stakerDirects.length >= 1) {
                                 hasRequiredDirects = true;
                                 level_bonus = interest * 10 / 100;
-                            } else if (up.level === 2 && upDirects.length >= 2) {
+                            } else if (down.level === 2 && stakerDirects.length >= 2) {
                                 hasRequiredDirects = true;
                                 level_bonus = interest * 8 / 100;
-                            } else if (up.level === 3 && upDirects.length >= 3) {
+                            } else if (down.level === 3 && stakerDirects.length >= 3) {
                                 hasRequiredDirects = true;
                                 level_bonus = interest * 5 / 100;
-                            } else if (up.level === 4 && upDirects.length >= 4) {
+                            } else if (down.level === 4 && stakerDirects.length >= 4) {
                                 hasRequiredDirects = true;
                                 level_bonus = interest * 4 / 100;
-                            } else if ((up.level === 5 || up.level === 6 || up.level === 7) && upDirects.length >= 5) {
+                            } else if ((down.level === 5 || down.level === 6 || down.level === 7) && stakerDirects.length >= 5) {
                                 hasRequiredDirects = true;
                                 level_bonus = interest * 3 / 100;
-                            } else if ((up.level === 8 || up.level === 9 || up.level === 10) && upDirects.length >= 7) {
+                            } else if ((down.level === 8 || down.level === 9 || down.level === 10) && stakerDirects.length >= 7) {
                                 hasRequiredDirects = true;
                                 level_bonus = interest * 2 / 100;
-                            } else if ((up.level === 11 || up.level === 12 || up.level === 13) && upDirects.length >= 8) {
+                            } else if ((down.level === 11 || down.level === 12 || down.level === 13) && stakerDirects.length >= 8) {
                                 hasRequiredDirects = true;
                                 level_bonus = interest * 1 / 100;
-                            } else if ((up.level === 14 || up.level === 15) && upDirects.length >= 10) {
+                            } else if ((down.level === 14 || down.level === 15) && stakerDirects.length >= 10) {
                                 hasRequiredDirects = true;
                                 level_bonus = interest * 0.5 / 100;
                             }
-                            console.log(level_bonus, ">................>>>>>>>level bonus outside")
-
+        
                             if (hasRequiredDirects && level_bonus !== undefined) {
-                                console.log(level_bonus, ">................>>>>>>>level bonus")
-
-                                // Find the latest staking record for the upline user
-                                const uplineStaking = await Staking.findOne({ id: up.id }).sort({ createdAt: -1 });
-
-                                if (uplineStaking) {
-                                    // If upline has a staking record, update it
-                                    bulkStak.push({
-                                        updateOne: {
-                                            filter: { _id: uplineStaking._id },
-                                            update: { $inc: { level_bonus_paid: level_bonus, paid: level_bonus } }
-                                        }
-                                    });
-                                } else {
-                                    // If upline has no staking record, create a transaction record for the level bonus
-                                    await Transaction.create({
-                                        user_id: up.user_id,
-                                        id: up.id,
-                                        amount: level_bonus,
-                                        currency: 'USDT',
-                                        income_type: 'sng_level',
-                                        transaction_type: 'LEVEL BONUS',
-                                        status: "COMPLETED",
-                                        from: stake.user_id,
-                                        from_user_name: stake.user_name,
-                                        package_amount: stake.amount,
-                                        description: `Level ${up.level} bonus from downline staking`
-                                    });
+                                console.log(`Eligible level ${down.level} income for staker ${stake.user_id} from downline user_id: ${down.user_id}, amount: ${level_bonus}`);
+                                // Ensure down.id is set
+                                if (!down.id) {
+                                    const userDoc = await Users.findOne({ user_id: down.user_id });
+                                    down.id = userDoc ? userDoc._id : down.user_id;
+                                    console.log(`Resolved down.id for user_id ${down.user_id}: ${down.id}`);
                                 }
-
+                                // Ensure stake.id is set
+                                if (!stake.id) {
+                                    const userDoc = await Users.findOne({ user_id: stake.user_id });
+                                    stake.id = userDoc ? userDoc._id : stake.user_id;
+                                    console.log(`Resolved stake.id for user_id ${stake.user_id}: ${stake.id}`);
+                                }
+                                // Payout to the staker (not the downline)
+                                bulkStak.push({
+                                    updateOne: {
+                                        filter: { _id: stake._id },
+                                        update: { $inc: { level_bonus_paid: level_bonus, paid: level_bonus } }
+                                    }
+                                });
                                 bulkWallet.push({
                                     updateOne: {
-                                        filter: { user_id: up.user_id },
+                                        filter: { user_id: stake.user_id },
                                         update: { $inc: { usdt_balance: level_bonus } }
                                     }
                                 });
                                 bulkTransactions.push({
-                                    user_id: up.user_id,
-                                    id: up.id,
+                                    user_id: stake.user_id,
+                                    id: stake.id,
                                     amount: level_bonus,
                                     staking_id: stake._id,
                                     currency: stake.currency,
                                     income_type: 'sng_level',
                                     transaction_type: 'SNG SMART BONUS (LEVEL INCOME)',
                                     status: "COMPLETE",
-                                    level: up.level,
+                                    level: down.level,
                                     package_amount: stake.amount,
-                                    from_user_id: stake.user_id,
-                                    from_user_name: stake.user_id,
-                                    description: `Level ${up.level} income of ${level_bonus} ${stake.currency} credited from downline user ${stake.user_id} staking ${stake.amount}`
+                                    from_user_id: down.user_id,
+                                    from_user_name: down.name,
+                                    description: `Level ${down.level} income of ${level_bonus} ${stake.currency} credited from downline user ${down.user_id} staking ${stake.amount}`
                                 });
-
-                                // Level income logging
-                                await logRewardUser({
-                                    user_id: up.user_id,
-                                    user_code: up.user_code || '',
-                                    type: 'levelIncome',
-                                    details: {
-                                        level: up.level,
-                                        level_bonus,
-                                        from_user_id: stake.user_id,
-                                        from_user_name: stake.user_name,
-                                        staking_id: stake._id,
-                                        amount: stake.amount,
-                                        roi: stake.roi,
-                                        currency: stake.currency,
-                                        description: `Level ${up.level} income of ${level_bonus} ${stake.currency} credited from downline user ${stake.user_id} staking ${stake.amount}`
-                                    }
-                                });
+                                console.log(`Credited level income to staker ${stake.user_id} for downline user ${down.user_id} at level ${down.level}`);
+                            } else {
+                                console.log(`Staker ${stake.user_id} is not eligible for level ${down.level} income from downline user_id: ${down.user_id}.`);
                             }
                         }
                     } else {
-                        console.log("Inside else condition in super bonus")
-                        // store all staking related operation in bulkStak
+                        console.log(`Staking complete for user_id: ${stake.user_id}. Marking status as COMPLETE.`);
                         bulkStak.push({
                             updateOne: {
                                 filter: { _id: stake._id },
                                 update: { $set: { status: 'COMPLETE' } }
                             }
-                        })
+                        });
                     }
                 }
-                // console.log(bulkStak, " : bulkStak")
-                // console.log(bulkTransactions, " : bulkTransactions")
-                // console.log(bulkWallet, " : bulkWallet")
-                // Execute bulk operations
-                if (bulkStak.length > 0) await Staking.bulkWrite(bulkStak);
-
-                // Insert transactions in bulk
-                if (bulkTransactions.length > 0) await Transaction.insertMany(bulkTransactions);
-
-                if (bulkWallet.length > 0) await Wallets.bulkWrite(bulkWallet)
-
+        
+                if (bulkStak.length > 0) {
+                    console.log(`Executing ${bulkStak.length} staking updates.`);
+                    await Staking.bulkWrite(bulkStak);
+                }
+                if (bulkTransactions.length > 0) {
+                    console.log(`Inserting ${bulkTransactions.length} transactions.`);
+                    await Transaction.insertMany(bulkTransactions);
+                }
+                if (bulkWallet.length > 0) {
+                    console.log(`Executing ${bulkWallet.length} wallet updates.`);
+                    await Wallets.bulkWrite(bulkWallet);
+                }
+        
                 console.log('SuperBonus Done...');
                 return true;
             } catch (error) {
-                throw new Error(error, ": Error");
+                console.error("Error in superBonus:", error);
+                throw new Error(error.message);
             }
         }
+        
 
         // This will calculate daily once at 12:01 am but distributed on weekly basis 
         // code when CCT will be generated on first day
@@ -1166,7 +1135,7 @@ process.on('message', async (message) => {
         // Schedule the cron job
         cron.schedule("1 0 * * *", () => {
         // cron.schedule("0 19 * * *", () => {
-        // cron.schedule("*/6 * * * *", () => {
+        // cron.schedule("*/5 * * * *", () => {
             console.log('Starting....');
             logToDb('info', 'Starting....');
             task(); 

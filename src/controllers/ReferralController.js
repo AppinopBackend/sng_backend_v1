@@ -41,7 +41,6 @@ const getDownlineTeam2 = async (id) => {
                     $and: [
                         { id: { $in: Object.keys(memberLevels) } },
                         { status: "RUNNING" },
-                        { rank_reward_counted: false } // Only count staking amounts that haven't been counted for rank rewards
                     ]
                 }
             },
@@ -480,5 +479,23 @@ module.exports = {
         } catch (error) {
             throw new Error(error.message);
         }
+    },
+
+    getNewDownlineTeam: async (userId) => {
+        let result = [];
+        let queue = [{ userId, level: 1 }];
+        
+        while (queue.length) {
+            const { userId, level } = queue.shift();
+            if (level > 15) continue;
+    
+            const directs = await Referral.find({ sponser_id: userId }).lean();
+            for (const direct of directs) {
+                result.push({ ...direct, level });
+                queue.push({ userId: direct.user_id, level: level + 1 });
+            }
+        }
+        return result;
     }
+    
 }
