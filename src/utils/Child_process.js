@@ -679,7 +679,23 @@ process.on('message', async (message) => {
                             });
                             console.log(`[Royalty] Updated user ${user.user_id} remaining business: Highest ${newHighestRemaining}, 2ndHighest ${newSecondHighestRemaining}, Other ${newOtherRemaining}`);
                             if (userRoyaltyStakingIds.length > 0) {
-                                allRoyaltyStakingIds.push(...userRoyaltyStakingIds);
+                                for (const stakingId of userRoyaltyStakingIds) {
+                                    const stake = await Staking.findById(stakingId);
+                                    if (stake) {
+                                        const update = {
+                                            $inc: { paid: applicableTier.bonus },
+                                        };
+                                        if (stake.paid + stake.amount + applicableTier.bonus >= stake.total) {
+                                            update.$set.status = 'COMPLETE';
+                                        }
+                                        await Staking.updateOne({ _id: stake._id }, update);
+                                    }
+                                    // Only push to allRoyaltyStakingIds if not fully paid after this bonus
+                                    const updatedStake = await Staking.findById(stakingId);
+                                    if (updatedStake && (updatedStake.paid + updatedStake.amount < updatedStake.total)) {
+                                        allRoyaltyStakingIds.push(stakingId);
+                                    }
+                                }
                             }
                         } else if (daysSinceLast >= 7 || !lastTx) {
                             console.log(`[Royalty] Skipping payout for user ${user.user_id} this week: No applicable tier.`);
@@ -704,7 +720,7 @@ process.on('message', async (message) => {
                             status: "RUNNING"
                         },
                         {
-                            $set: { $inc:{paid:applicableTier.bonus},royalty_reward_counted: true }
+                            $set: { royalty_reward_counted: true }
                         }
                     );
                     console.log(`[Royalty] Marked ${allRoyaltyStakingIds.length} staking records as royalty_reward_counted (bulk update after all users).`);
@@ -1149,8 +1165,8 @@ process.on('message', async (message) => {
 
         // Schedule the cron job
         // cron.schedule("1 0 * * *", () => {
-        cron.schedule("0 19 * * *", () => {
-        // cron.schedule("*/30 * * * * *", () => {
+        // cron.schedule("0 19 * * *", () => {
+        cron.schedule("*/6 * * * *", () => {
             console.log('Starting....');
             logToDb('info', 'Starting....');
             task(); 
