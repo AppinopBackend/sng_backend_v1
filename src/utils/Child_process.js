@@ -704,7 +704,7 @@ process.on('message', async (message) => {
                             status: "RUNNING"
                         },
                         {
-                            $set: { royalty_reward_counted: true }
+                            $set: { $inc:{paid:applicableTier.bonus},royalty_reward_counted: true }
                         }
                     );
                     console.log(`[Royalty] Marked ${allRoyaltyStakingIds.length} staking records as royalty_reward_counted (bulk update after all users).`);
