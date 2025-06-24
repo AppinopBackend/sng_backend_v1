@@ -1160,7 +1160,7 @@ process.on('message', async (message) => {
             // Add your task logic here
             await boosterincome()
             await superBonus();
-            await carnivalCorporateToken();
+            // await carnivalCorporateToken();
              await carnivalRankRewards();
              await carnivalRoyaltyBonus()
             
@@ -1172,7 +1172,7 @@ process.on('message', async (message) => {
         // cron.schedule("*/5 * * * *", () => {
             console.log('Starting....');
             logToDb('info', 'Starting....');
-            // task(); 
+            task(); 
         }, {
             scheduled: true,
             timezone: "Asia/Kolkata"

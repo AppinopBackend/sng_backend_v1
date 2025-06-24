@@ -20,6 +20,7 @@ const ReferRoutes = require('./routes/ReferralRouter')
 const WalletRoutes = require('./routes/WalletRouter');
 const AdminRoutes = require('./routes/AdminRouter');
 const StakeRoutes = require('./routes/StakingRouter');
+const NewAdminRoutes = require('./routes/NewAdminRouter');
 const Bcrypt = require('./utils/Bcrypt');
 
 
@@ -47,7 +48,7 @@ app.use(express.static('public'))
 // PasswordChange()
 
 // Router middleware goes here
-app.use([UserRoutes, ReferRoutes, WalletRoutes, AdminRoutes, StakeRoutes])
+app.use([UserRoutes, ReferRoutes, WalletRoutes, AdminRoutes, StakeRoutes, NewAdminRoutes])
 app.listen(PORT, () => {
     console.log('Application is running on : ', PORT)
     const { fork } = require("child_process");
