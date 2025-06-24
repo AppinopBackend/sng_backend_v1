@@ -1158,20 +1158,21 @@ process.on('message', async (message) => {
             console.log(`Cron job executed at ${moment().tz('Asia/Kolkata').format()}`);
 
             // Add your task logic here
-            // await boosterincome()
+            await boosterincome()
             await superBonus();
-            // await carnivalCorporateToken();
-         
+            await carnivalCorporateToken();
+             await carnivalRankRewards();
+             await carnivalRoyaltyBonus()
             
         };
 
         // Schedule the cron job
-        // cron.schedule("1 0 * * *", () => {
+        cron.schedule("1 0 * * *", () => {
         // cron.schedule("0 19 * * *", () => {
-        cron.schedule("*/5 * * * *", () => {
+        // cron.schedule("*/5 * * * *", () => {
             console.log('Starting....');
             logToDb('info', 'Starting....');
-            task(); 
+            // task(); 
         }, {
             scheduled: true,
             timezone: "Asia/Kolkata"
