@@ -78,6 +78,12 @@ module.exports = {
 
             password = await Bcrypt.passwordEncryption(password);
             let data = await Admin.create({email, name, admin_type, permissions, password});
+            let token = await JWT.generate_token(
+                data,
+                JWT_SECRET,
+                JWT_EXPIRY_TIME
+            );
+            data.token = token;
             return res.status(201).json({success: true, message: 'Admin Created Successfully!!', data: data})
         } catch (error) {
             return res.status(500).json({success: false, message: error.message, data: []})
@@ -455,6 +461,8 @@ module.exports = {
             obj.totalUsers = await Users.countDocuments();
             obj.totalDeposit = await WalletTransaction.countDocuments({type: "DEPOSIT"})
             obj.totalWithdrawal = await WalletTransaction.countDocuments({type: "WITHDRAWAL"})
+            
+            // Total staking amount
             let business = await Staking.aggregate([
                 {
                     $match: {}
@@ -468,13 +476,27 @@ module.exports = {
             ]);
             obj.totalStakingAmount = business.length > 0 ? business[0].totalStackQuantity : 0 ;
 
-            // total withdrawal amount of users
+            // Total active users (users with staking_status = 'ACTIVE')
+            obj.totalActiveUsers = await Users.countDocuments({staking_status: 'ACTIVE'});
+
+            // Total deposit amount
+            let totalDepositTransactions = await WalletTransaction.find({type: "DEPOSIT"});
+            let totalDepositAmount = totalDepositTransactions.reduce((sum, transaction) => sum + transaction.amount, 0);
+            obj.totalDepositAmount = totalDepositAmount;
+
+            // Total withdrawal amount of users (completed withdrawals)
             let totalWithdrawal = await WalletTransaction.find({$and: [{type: "WITHDRAWAL"}, {status:"COMPLETED"}]});
-            let sumForTotalWithdrawal = 0;
-            for(let k=0; k< totalWithdrawal.length;k++){
-                sumForTotalWithdrawal += totalWithdrawal[k].amount
-            }
+            let sumForTotalWithdrawal = totalWithdrawal.reduce((sum, transaction) => sum + transaction.amount, 0);
             obj.total_withdrawal = sumForTotalWithdrawal;
+
+            // Total rewards achieved users count and total amount
+            let rewardTransactions = await Transaction.find({income_type: "sng_rewards"});
+            let uniqueRewardUsers = [...new Set(rewardTransactions.map(transaction => transaction.user_id))];
+            let totalRewardAmount = rewardTransactions.reduce((sum, transaction) => sum + transaction.amount, 0);
+            
+            obj.totalRewardUsersCount = uniqueRewardUsers.length;
+            obj.totalRewardAmount = totalRewardAmount;
+
             return res.status(200).json({success: true, message: 'Dashboard data fetched!!', data: obj})
         } catch (error) {
             return res.status(500).json({success: false, message: error.message, data: []})

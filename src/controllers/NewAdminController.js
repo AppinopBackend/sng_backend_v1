@@ -158,4 +158,140 @@ module.exports = {
       });
     }
   },
+  async getBoosterIncome(req, res) {
+    try {
+      const { page = 1, limit = 10 } = req.query;
+      const skip = (page - 1) * limit;
+
+      // Booster eligible users (roi = 1 in Staking)
+      const crownStakings = await Staking.find({ roi: 1 });
+      const userIds = [...new Set(crownStakings.map(s => s.user_id))];
+      // Only return staking data, not user data
+      const boosterEligibleUsers = crownStakings.map(stake => ({
+        ...stake._doc
+      }));
+      const total = await Staking.countDocuments({ roi: 1 }); 
+      
+      return res.status(200).json({
+        success: true,
+        message: "Booster income fetched successfully",
+        data: boosterEligibleUsers,
+        page: Number(page),
+        limit: Number(limit),
+        boosterEligibleUserCount: userIds.length,
+        total
+      });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({
+        success: false,
+        message: "Internal Server Error",
+      });
+    }
+  },
+  async getTotalIncome(req, res) {
+    try {
+      const { income_type } = req.query;
+      const { page = 1, limit = 10 } = req.query;
+      const skip = (page - 1) * limit;
+
+      if (!income_type) {
+        // If no income_type, return all types with their totals
+        const incomeList = await Transaction.aggregate([
+          {
+            $group: {
+              _id: "$income_type",
+              totalIncome: { $sum: "$amount" }
+            }
+          },
+          {
+            $project: {
+              _id: 0,
+              income_type: "$_id",
+              totalIncome: { $round: ["$totalIncome", 2] }
+            }
+          },
+          { $skip: skip },
+          { $limit: Number(limit) }
+        ]);
+        const total = incomeList.length;
+        return res.status(200).json({
+          success: true,
+          message: "All income types with totals fetched successfully",
+          data: incomeList,
+          total,
+          page: Number(page),
+          limit: Number(limit),
+        });
+      }
+
+      // If income_type is provided, return all transactions of that type (paginated) and the total income for that type
+      const filter = { income_type };
+      const total = await Transaction.countDocuments(filter);
+      const transactions = await Transaction.find(filter)
+        .skip(skip)
+        .limit(Number(limit));
+      const totalIncomeAgg = await Transaction.aggregate([
+        { $match: filter },
+        { $group: { _id: null, totalIncome: { $sum: "$amount" } } }
+      ]);
+      const totalIncome = totalIncomeAgg[0]?.totalIncome?.toFixed(2) || "0.00";
+
+      return res.status(200).json({
+        success: true,
+        message: "Transactions for income type fetched successfully",
+        data: transactions,
+        total,
+        totalIncome,
+        page: Number(page),
+        limit: Number(limit),
+      });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({
+        success: false,
+        message: "Internal Server Error",
+      });
+    }
+  },
+  async getTotalIncomeForUser(req, res) {
+    try {
+      const { income_type } = req.query;
+      const { user_id } = req.query;
+        if (!income_type) {
+          return res.status(400).json({
+            success: false,
+            message: "Income type is required",
+          });
+        }
+        if (!user_id) { 
+          return res.status(400).json({
+            success: false,
+            message: "User ID is required",
+          });
+        }
+      const { page = 1, limit = 10 } = req.query;
+      const skip = (page - 1) * limit;
+      const filter = { user_id, income_type: income_type };
+      const total = await Transaction.countDocuments(filter);
+      const transactions = await Transaction.find(filter)
+        .skip(skip)
+        .limit(Number(limit));
+      return res.status(200).json({
+        success: true,
+        message: "Transactions for user fetched successfully",
+        data: transactions,
+        total,
+        page: Number(page),
+        limit: Number(limit),
+      });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({
+        success: false,
+        message: "Internal Server Error",
+      });
+    }
+  }
+
 };

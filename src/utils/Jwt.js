@@ -7,9 +7,7 @@ const generate_token = async (data, secret, expiry_time) => {
         });
         return token;
     } catch (error) {
-        return res
-            .status(500)
-            .json({ success: false, message: error.message, data: [] });
+        return { success: false, message: error.message, data: [] };
     }
 };
 
@@ -18,9 +16,7 @@ const verify_token = async (token, secret) => {
         const tokenn = await jwt.verify(token, secret);
         return tokenn;
     } catch (error) {
-        return res
-            .status(500)
-            .json({ success: false, message: error.message, data: [] });
+        return { success: false, message: error.message, data: [] };
     }
 };
 

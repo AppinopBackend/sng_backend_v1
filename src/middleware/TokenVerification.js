@@ -24,6 +24,48 @@ const token_verification = async (req, res, next) => {
     }
 };
 
+const admin_verification = async (req, res, next) => {
+    try {
+        const header = req.header("Authorization");
+        if (header === undefined) {
+            return res.status(401).json({
+                success: false,
+                message: "Unauthorized Request!",
+                data: [],
+            });
+        }
+        const token = header.replace("Bearer ", "");
+        const user = await jwt.verify_token(token, JWT_SECRET);
+        // Check if user exists and has admin properties
+        if (!user.data) {
+            return res.status(403).json({
+                success: false,
+                message: "Access denied. Admin privileges required!",
+                data: [],
+            });
+        }
+        
+        // Check if admin status is ACTIVE
+        if (user.data.status !== 'ACTIVE') {
+            return res.status(403).json({
+                success: false,
+                message: "Your admin account is deactivated. Please contact super admin!",
+                data: [],
+            });
+        }
+        
+        req.user = user.data;
+        return next();
+    } catch (e) {
+        console.log(e)
+        return res.status(401).json({
+            success: false,
+            message: `Token is expired with message: ${e.message}`,
+            data: [],
+        });
+    }
+};
+
 const api_verification = async (req, res, next) => {
     try {
         const header = req.header("Authorization");
@@ -52,5 +94,6 @@ const api_verification = async (req, res, next) => {
 
 module.exports = {
     token_verification,
+    admin_verification,
     api_verification
 };
