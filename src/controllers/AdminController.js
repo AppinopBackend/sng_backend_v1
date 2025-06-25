@@ -1064,37 +1064,54 @@ module.exports = {
     
     all_user_backup: async (req, res) => {
         try {
-            let data = [];
-            let all_users = await Users.find().select('user_id activation_date createdAt');
-    
-            for (let user of all_users) {
-                // Fetch staking data for each user
-                // console.log(user, ":User");
-                let staking_data = await Staking.find({ user_id: user.user_id }).sort('createdAt');
-    
-                // Extract first staking createdAt date and total staking amount
-                let first_staking_date = staking_data.length > 0 ? staking_data[0].createdAt : null;
-                let total_staking = staking_data.reduce((sum, staking) => sum + staking.amount, 0);
-    
-                // Fetch transaction data for each user and sum the amounts for "CARNIVAL SUPER BONUS"
-                let transactions = await Transaction.find({ user_id: user.user_id, transaction_type: "CARNIVAL SUPER BONUS" });
-                let total_roi_bonus = transactions.reduce((sum, transaction) => sum + transaction.amount, 0);
-    
-                // Combine user data, staking data, and transaction data into a new object
-                let user_data = {
+            // 1. Fetch all users with required fields and staking_status ACTIVE
+            const all_users = await Users.find({ staking_status: 'ACTIVE' }, 'user_id name email activation_date createdAt').lean();
+            const userIds = all_users.map(u => u.user_id);
+
+            // 2. Fetch all staking records for these users, group by user_id
+            const stakingAgg = await Staking.aggregate([
+                { $match: { user_id: { $in: userIds } } },
+                { $sort: { createdAt: 1 } },
+                { $group: {
+                    _id: '$user_id',
+                    first_staking_date: { $first: '$createdAt' },
+                    total_staking: { $sum: '$amount' }
+                }}
+            ]);
+            const stakingMap = stakingAgg.reduce((acc, s) => {
+                acc[s._id] = s;
+                return acc;
+            }, {});
+
+            // 3. Fetch all transactions for these users, group by user_id for total_income
+            const transactionAgg = await Transaction.aggregate([
+                { $match: { user_id: { $in: userIds } } },
+                { $group: {
+                    _id: '$user_id',
+                    total_income: { $sum: '$amount' }
+                }}
+            ]);
+            const transactionMap = transactionAgg.reduce((acc, t) => {
+                acc[t._id] = t.total_income;
+                return acc;
+            }, {});
+
+            // 4. Merge all data
+            const data = all_users.map(user => {
+                const staking = stakingMap[user.user_id] || {};
+                return {
                     user_id: user.user_id,
+                    user_name: user.name,
+                    user_email: user.email,
                     activation_date: user.activation_date,
-                    registration_date : user.createdAt,
-                    first_staking_date: first_staking_date,
-                    total_staking: total_staking,
-                    total_roi: total_roi_bonus
+                    registration_date: user.createdAt,
+                    first_staking_date: staking.first_staking_date || null,
+                    total_staking: staking.total_staking || 0,
+                    total_income_paid: transactionMap[user.user_id] || 0
                 };
-    
-                // Push the combined data into the final array
-                data.push(user_data);
-            }
-    
-            return res.status(200).json({ success: true, message: "User Data Backup Fetched", data: data });
+            });
+
+            return res.status(200).json({ success: true, message: "User Data Backup Fetched", data });
         } catch (error) {
             return res.status(500).json({ success: false, message: error.message, data: [] });
         }
