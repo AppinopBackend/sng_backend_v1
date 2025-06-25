@@ -24,5 +24,8 @@ router
     // Get User Direct Referred
     .get('/v1/admin/user-direct-referred', [admin_verification], NewAdminController.userDirectReferred)
 
+    // Update User Staking Status
+    .post('/v1/admin/update-user-staking-status', [admin_verification], NewAdminController.updateUserStakingStatus)
+
 
 module.exports = router;

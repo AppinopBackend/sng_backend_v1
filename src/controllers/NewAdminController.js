@@ -363,4 +363,44 @@ module.exports = {
       });
     }
   },
+  async updateUserStakingStatus(req, res) {
+    try {
+      const { user_id, staking_status } = req.body;
+      if (!user_id || !staking_status) {
+        return res.status(400).json({
+          success: false,
+          message: "user_id and staking_status are required",
+        });
+      }
+      const validStatuses = ["ACTIVE", "INACTIVE"];
+      if (!validStatuses.includes(staking_status)) {
+        return res.status(400).json({
+          success: false,
+          message: "staking_status must be either 'ACTIVE' or 'INACTIVE'",
+        });
+      }
+      const user = await User.findOneAndUpdate(
+        { user_id },
+        { staking_status },
+        { new: true }
+      );
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+      return res.status(200).json({
+        success: true,
+        message: `User staking_status updated to ${staking_status}`,
+        data: { user_id: user.user_id, staking_status: user.staking_status },
+      });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({
+        success: false,
+        message: "Internal Server Error",
+      });
+    }
+  },
 };
