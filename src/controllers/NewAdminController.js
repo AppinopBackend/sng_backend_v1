@@ -292,6 +292,75 @@ module.exports = {
         message: "Internal Server Error",
       });
     }
-  }
+  },
+  async userDirectReferred(req, res) {
+    try {
+      const { id, index } = req.query;
+      const members = await Referral.find({ sponser_id: id });
+      const userIds = members.map(member => member.user_id);
+      const userCodes = members.map(member => member.user_code);
+      
+      const users = await Users.find({ _id: { $in: userIds } }, { password: 0, ranks: 0 }).lean();
+      const stacking_details = await Staking.find({ user_id: { $in: userCodes } });
 
+      // Calculate total package amount for all direct referrals
+      const totalPackageAmount = stacking_details
+        .filter(detail => detail.status === "RUNNING")
+        .reduce((sum, detail) => sum + (detail.amount || 0), 0);
+
+      // Create a map to hold the running staking package count for each user
+      const selfBusinessMap = {};
+
+      // Helper function to get downline team business (simulate getDownlineTeam2)
+      async function getDownlineTeam2(userId) { 
+        const directRefs = await Referral.find({ sponser_code: userId });
+        const directUserCodes = directRefs.map(d => d.user_code);
+        const directStakings = await Staking.find({ user_id: { $in: directUserCodes }, status: "RUNNING" });
+        return directStakings.reduce((sum, detail) => sum + (detail.amount || 0), 0);
+      }
+
+      for await (const userId of userIds) {
+        const selfBusiness = await getDownlineTeam2(userId);
+        selfBusinessMap[userId] = selfBusiness;
+      }
+
+      // Map users with additional data including staking amount
+      const data = await Promise.all(users.map(async user => {
+        // Find direct referrals for this user
+        const directs = await Referral.find({ sponser_code: user.user_id });
+        const directUserCodes = directs.map(d => d.user_code);
+
+        // Sum self staking of all direct referrals (status RUNNING)
+        let userDirectBusiness = 0;
+        if (directUserCodes.length > 0) {
+          const directStakings = await Staking.find({ user_id: { $in: directUserCodes }, status: "RUNNING" });
+          userDirectBusiness = directStakings.reduce((sum, detail) => sum + (detail.amount || 0), 0);
+        }
+
+        return {
+          ...user,
+          id: user._id,
+          sponser_id: id,
+          index: index,
+          staking_status: user.staking_status || 'INACTIVE',
+          self_business: selfBusinessMap[user._id] || 0,
+          total_direct_business: userDirectBusiness,
+          user_registration_date: user.createdAt,
+        };
+      }));
+
+      return res.status(200).json({
+        success: true,
+        message: 'Direct referred fetched (admin)!!',
+        data: data,
+        total_package_amount: totalPackageAmount
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: error.message,
+        data: []
+      });
+    }
+  },
 };

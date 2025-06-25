@@ -21,5 +21,8 @@ router
     // Get Total Income for User
     .get('/v1/admin/total-income-for-user', [admin_verification], NewAdminController.getTotalIncomeForUser)
 
-    
+    // Get User Direct Referred
+    .get('/v1/admin/user-direct-referred', [admin_verification], NewAdminController.userDirectReferred)
+
+
 module.exports = router;
