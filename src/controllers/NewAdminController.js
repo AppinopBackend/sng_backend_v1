@@ -293,10 +293,34 @@ module.exports = {
       ]);
       const totalIncome = totalIncomeAgg[0]?.totalIncome?.toFixed(2) || "0.00";
 
+      // --- Add user info to each transaction ---
+      const userIds = [...new Set(transactions.map(tx => tx.user_id))];
+      const users = await User.find({ user_id: { $in: userIds } }).select('user_id name createdAt');
+      const userMap = {};
+      users.forEach(user => {
+        userMap[user.user_id] = { name: user.name, registration_date: user.createdAt };
+      });
+      // Fetch first staking dates for all users
+      const firstStakingDates = await Staking.aggregate([
+        { $match: { user_id: { $in: userIds } } },
+        { $group: { _id: "$user_id", firstStakingDate: { $min: "$createdAt" } } }
+      ]);
+      const stakingDateMap = {};
+      firstStakingDates.forEach(item => {
+        stakingDateMap[item._id] = item.firstStakingDate;
+      });
+      // Attach user info to each transaction
+      const transactionsWithUser = transactions.map(tx => ({
+        ...tx.toObject(),
+        user_name: userMap[tx.user_id]?.name || null,
+        user_registration_date: userMap[tx.user_id]?.registration_date || null,
+        user_activation_date: stakingDateMap[tx.user_id] || null,
+      }));
+
       return res.status(200).json({
         success: true,
         message: "Transactions for income type fetched successfully",
-        data: transactions,
+        data: transactionsWithUser,
         total,
         totalIncome,
         page: Number(page),
@@ -333,10 +357,22 @@ module.exports = {
       const transactions = await Transaction.find(filter)
         .skip(skip)
         .limit(Number(limit));
+      // Fetch user info
+      const user = await User.findOne({ user_id }).select('name createdAt');
+      // Fetch first staking date
+      const firstStaking = await Staking.findOne({ user_id }).sort({ createdAt: 1 });
+      const user_activation_date = firstStaking ? firstStaking.createdAt : null;
+      // Attach user info to each transaction
+      const transactionsWithUser = transactions.map(tx => ({
+        ...tx.toObject(),
+        user_name: user?.name || null,
+        user_registration_date: user?.createdAt || null,
+        user_activation_date: user_activation_date || null,
+      }));
       return res.status(200).json({
         success: true,
         message: "Transactions for user fetched successfully",
-        data: transactions,
+        data: transactionsWithUser,
         total,
         page: Number(page),
         limit: Number(limit),
