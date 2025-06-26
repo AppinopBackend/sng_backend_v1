@@ -519,11 +519,22 @@ module.exports = {
                 return acc;
             }, {});
     
+            // Fetch first staking date for each user using aggregation
+            const firstStakingDates = await Staking.aggregate([
+                { $match: { user_id: { $in: userIds } } },
+                { $group: { _id: "$user_id", firstStakingDate: { $min: "$createdAt" } } }
+            ]);
+            const stakingDateMap = {};
+            firstStakingDates.forEach(item => {
+                stakingDateMap[item._id] = item.firstStakingDate;
+            });
+    
             data = data.map(item => {
                 return {
                     ...item._doc,
                     user_name: userMap[item.user_id]?.name || null,
-                    rank: userMap[item.user_id]?.rank || null
+                    rank: userMap[item.user_id]?.rank || null,
+                    user_activation_date: stakingDateMap[item.user_id] || null
                 };
             });
             return res.status(200).json({ success: true, message: 'All Staking Transaction Fetched!!', data: data })
@@ -966,18 +977,28 @@ module.exports = {
                 acc[user.user_id] = user.name;
                 return acc;
             }, {});
+
+            // Fetch first staking date for each user using aggregation
+            const firstStakingDates = await Staking.aggregate([
+                { $match: { user_id: { $in: userIds } } },
+                { $group: { _id: "$user_id", firstStakingDate: { $min: "$createdAt" } } }
+            ]);
+            const stakingDateMap = {};
+            firstStakingDates.forEach(item => {
+                stakingDateMap[item._id] = item.firstStakingDate;
+            });
             
             tranferHistory = tranferHistory.map(item => {
                 return {
                     ...item._doc,
-                    user_name: userMap[item.user_id]
+                    user_name: userMap[item.user_id],
+                    user_activation_date: stakingDateMap[item.user_id] || null
                 };
             });
             return res.status(200).json({ success : true, message : "Admin Fund Transfer History Fetched", data : tranferHistory})
         } catch (error) {
             return res.status(500).json({ success: false, message: error.message, data: [] });
         }
-
     },
 
     add_notification : async (req, res) => {
@@ -1107,6 +1128,7 @@ module.exports = {
                     user_id: user.user_id,
                     user_name: user.name,
                     user_email: user.email,
+                    phone : user.mobileNumber,
                     activation_date: user.activation_date,
                     registration_date: user.createdAt,
                     first_staking_date: staking.first_staking_date || null,
