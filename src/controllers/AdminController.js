@@ -1090,7 +1090,7 @@ module.exports = {
     all_user_backup: async (req, res) => {
         try {
             // 1. Fetch all users with required fields and staking_status ACTIVE
-            const all_users = await Users.find({ staking_status: 'ACTIVE' }, 'user_id name email activation_date createdAt').lean();
+            const all_users = await Users.find({ staking_status: 'ACTIVE' }, 'user_id name email phone activation_date createdAt').lean();
             const userIds = all_users.map(u => u.user_id);
 
             // 2. Fetch all staking records for these users, group by user_id
