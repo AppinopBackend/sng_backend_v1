@@ -1128,7 +1128,7 @@ module.exports = {
                     user_id: user.user_id,
                     user_name: user.name,
                     user_email: user.email,
-                    phone : user.mobileNumber,
+                    phone : user.phone,
                     activation_date: user.activation_date,
                     registration_date: user.createdAt,
                     first_staking_date: staking.first_staking_date || null,
