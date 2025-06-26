@@ -56,10 +56,36 @@ module.exports = {
         .skip(skip)
         .limit(Number(limit));
 
+      // Get unique user IDs from rewards
+      const userIds = [...new Set(rewards.map(reward => reward.user_id))];
+      
+      // Fetch user data for all users
+      const users = await User.find({ user_id: { $in: userIds } }).select('user_id name');
+      const userMap = {};
+      users.forEach(user => {
+        userMap[user.user_id] = user.name;
+      });
+
+      // Fetch first staking dates for all users
+      const firstStakingDates = await Staking.aggregate([
+        { $match: { user_id: { $in: userIds } } },
+        { $group: { 
+          _id: "$user_id", 
+          firstStakingDate: { $min: "$createdAt" } 
+        }}
+      ]);
+      
+      const stakingDateMap = {};
+      firstStakingDates.forEach(item => {
+        stakingDateMap[item._id] = item.firstStakingDate;
+      });
+
       const rewardsData = rewards.map((reward) => {
         return {
           id: reward._id,
           user_id: reward.user_id,
+          user_name: userMap[reward.user_id] || null,
+          user_activation_date: stakingDateMap[reward.user_id] ? stakingDateMap[reward.user_id].toLocaleString() : null,
           amount: reward.amount,
           staking_id: reward.staking_id,
           from: reward.from,
@@ -123,17 +149,22 @@ module.exports = {
       const userName = user.name;
       const userEmail = user.email;
 
+      // Get user's first staking date
+      const firstStaking = await Staking.findOne({ user_id: user_id }).sort({ createdAt: 1 });
+      const userActivationDate = firstStaking ? firstStaking.createdAt.toLocaleString() : null;
+
       const skip = (page - 1) * limit;
       const filter = { user_id, income_type: "sng_rewards" };
       const total = await Transaction.countDocuments(filter);
       const reward = await Transaction.find(filter)
         .skip(skip)
         .limit(Number(limit));
-      // Attach user_name and user_email to each reward
+      // Attach user_name, user_email, and user_activation_date to each reward
       const rewardsData = reward.map(r => ({
         ...r.toObject(),
         user_name: userName,
         user_email: userEmail,
+        user_activation_date: userActivationDate,
       }));
       // Calculate total income for this user
       const totalIncomeAgg = await Transaction.aggregate([
@@ -166,10 +197,35 @@ module.exports = {
       // Booster eligible users (roi = 1 in Staking)
       const crownStakings = await Staking.find({ roi: 1 });
       const userIds = [...new Set(crownStakings.map(s => s.user_id))];
-      // Only return staking data, not user data
+      
+      // Fetch user data for all booster eligible users
+      const users = await User.find({ user_id: { $in: userIds } }).select('user_id name');
+      const userMap = {};
+      users.forEach(user => {
+        userMap[user.user_id] = user.name;
+      });
+
+      // Fetch first staking dates for all users
+      const firstStakingDates = await Staking.aggregate([
+        { $match: { user_id: { $in: userIds } } },
+        { $group: { 
+          _id: "$user_id", 
+          firstStakingDate: { $min: "$createdAt" } 
+        }}
+      ]);
+      
+      const stakingDateMap = {};
+      firstStakingDates.forEach(item => {
+        stakingDateMap[item._id] = item.firstStakingDate;
+      });
+
+      // Add user_name and user_activation_date to each staking record
       const boosterEligibleUsers = crownStakings.map(stake => ({
-        ...stake._doc
+        ...stake._doc,
+        user_name: userMap[stake.user_id] || null,
+        user_activation_date: stakingDateMap[stake.user_id] ? stakingDateMap[stake.user_id].toLocaleString() : null,
       }));
+      
       const total = await Staking.countDocuments({ roi: 1 }); 
       
       return res.status(200).json({

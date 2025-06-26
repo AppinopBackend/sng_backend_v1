@@ -507,19 +507,23 @@ module.exports = {
         try {
             let data = await Staking.find();
 
-            // adding username 
+            // adding username and rank
             const userIds = data.map(item => item.user_id);
             const users = await Users.find({ user_id: { $in: userIds } });
     
             const userMap = users.reduce((acc, user) => {
-                acc[user.user_id] = user.name;
+                acc[user.user_id] = {
+                    name: user.name,
+                    rank: user.current_rank
+                };
                 return acc;
             }, {});
     
             data = data.map(item => {
                 return {
                     ...item._doc,
-                    user_name: userMap[item.user_id]
+                    user_name: userMap[item.user_id]?.name || null,
+                    rank: userMap[item.user_id]?.rank || null
                 };
             });
             return res.status(200).json({ success: true, message: 'All Staking Transaction Fetched!!', data: data })
