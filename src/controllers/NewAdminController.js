@@ -259,8 +259,6 @@ module.exports = {
   async getTotalIncome(req, res) {
     try {
       let { income_type, page = 1, limit } = req.query;
-      page = Number(page);
-      limit = limit !== undefined ? Number(limit) : undefined;
       let skip = 0;
       if (limit && limit > 0) skip = (page - 1) * limit;
 
@@ -323,6 +321,13 @@ module.exports = {
         user_registration_date: userMap[tx.user_id]?.registration_date || null,
         user_activation_date: stakingDateMap[tx.user_id] || null,
       }));
+
+      // Calculate total income for this income_type
+      const totalIncomeAgg = await Transaction.aggregate([
+        { $match: filter },
+        { $group: { _id: null, totalIncome: { $sum: "$amount" } } }
+      ]);
+      const totalIncome = totalIncomeAgg[0]?.totalIncome || 0;
 
       return res.status(200).json({
         success: true,
