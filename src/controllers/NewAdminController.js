@@ -24,13 +24,15 @@ const User = require("../models/User");
 module.exports = {
   async getAllRewards(req, res) {
     try {
-      const { page = 1, limit = 10, search = "" } = req.query;
-      const skip = (page - 1) * limit;
-      let userFilter = {};
+      let { page = 1, limit } = req.query;
+      page = Number(page);
+      limit = limit !== undefined ? Number(limit) : undefined;
+      let skip = 0;
+      if (limit && limit > 0) skip = (page - 1) * limit;
 
-      // If search is provided, find matching users by name or email
-      if (search) {
-        const userRegex = new RegExp(search, "i");
+      let userFilter = {};
+      if (req.query.search) {
+        const userRegex = new RegExp(req.query.search, "i");
         const matchingUsers = await User.find({
           $or: [
             { name: { $regex: userRegex } },
@@ -41,7 +43,6 @@ module.exports = {
         userFilter.user = { $in: userIds };
       }
 
-      // Add reward filters
       const rewardFilter = {
         status: "COMPLETE",
         income_type: "sng_rewards",
@@ -50,11 +51,9 @@ module.exports = {
 
       const total = await Transaction.countDocuments(rewardFilter);
 
-      const rewards = await Transaction.find(rewardFilter)
-        // .populate('user', 'name email') // Removed because Transaction does not support population
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(Number(limit));
+      let rewardsQuery = Transaction.find(rewardFilter).sort({ createdAt: -1 });
+      if (limit && limit > 0) rewardsQuery = rewardsQuery.skip(skip).limit(limit);
+      const rewards = await rewardsQuery;
 
       // Get unique user IDs from rewards
       const userIds = [...new Set(rewards.map(reward => reward.user_id))];
@@ -138,7 +137,12 @@ module.exports = {
   },
   async getRewardForUser(req, res) {
     try {
-      const { user_id, page = 1, limit = 10 } = req.query;
+      let { user_id, page = 1, limit } = req.query;
+      page = Number(page);
+      limit = limit !== undefined ? Number(limit) : undefined;
+      let skip = 0;
+      if (limit && limit > 0) skip = (page - 1) * limit;
+
       const user = await User.findOne({ user_id: user_id });
       if (!user) {
         return res.status(404).json({
@@ -153,12 +157,13 @@ module.exports = {
       const firstStaking = await Staking.findOne({ user_id: user_id }).sort({ createdAt: 1 });
       const userActivationDate = firstStaking ? firstStaking.createdAt.toLocaleString() : null;
 
-      const skip = (page - 1) * limit;
       const filter = { user_id, income_type: "sng_rewards" };
       const total = await Transaction.countDocuments(filter);
-      const reward = await Transaction.find(filter)
-        .skip(skip)
-        .limit(Number(limit));
+
+      let rewardQuery = Transaction.find(filter);
+      if (limit && limit > 0) rewardQuery = rewardQuery.skip(skip).limit(limit);
+      const reward = await rewardQuery;
+
       // Attach user_name, user_email, and user_activation_date to each reward
       const rewardsData = reward.map(r => ({
         ...r.toObject(),
@@ -191,11 +196,17 @@ module.exports = {
   },
   async getBoosterIncome(req, res) {
     try {
-      const { page = 1, limit = 10 } = req.query;
-      const skip = (page - 1) * limit;
+      let { page = 1, limit } = req.query;
+      page = Number(page);
+      limit = limit !== undefined ? Number(limit) : undefined;
+      let skip = 0;
+      if (limit && limit > 0) skip = (page - 1) * limit;
+
+      let crownStakingsQuery = Staking.find({ roi: 1 });
+      if (limit && limit > 0) crownStakingsQuery = crownStakingsQuery.skip(skip).limit(limit);
+      const crownStakings = await crownStakingsQuery;
 
       // Booster eligible users (roi = 1 in Staking)
-      const crownStakings = await Staking.find({ roi: 1 });
       const userIds = [...new Set(crownStakings.map(s => s.user_id))];
       
       // Fetch user data for all booster eligible users
@@ -247,13 +258,14 @@ module.exports = {
   },
   async getTotalIncome(req, res) {
     try {
-      const { income_type } = req.query;
-      const { page = 1, limit = 10 } = req.query;
-      const skip = (page - 1) * limit;
+      let { income_type, page = 1, limit } = req.query;
+      page = Number(page);
+      limit = limit !== undefined ? Number(limit) : undefined;
+      let skip = 0;
+      if (limit && limit > 0) skip = (page - 1) * limit;
 
       if (!income_type) {
-        // If no income_type, return all types with their totals
-        const incomeList = await Transaction.aggregate([
+        let incomeListAgg = Transaction.aggregate([
           {
             $group: {
               _id: "$income_type",
@@ -266,32 +278,27 @@ module.exports = {
               income_type: "$_id",
               totalIncome: { $round: ["$totalIncome", 2] }
             }
-          },
-          { $skip: skip },
-          { $limit: Number(limit) }
+          }
         ]);
+        if (limit && limit > 0) incomeListAgg = incomeListAgg.skip(skip).limit(limit);
+        const incomeList = await incomeListAgg;
         const total = incomeList.length;
         return res.status(200).json({
           success: true,
           message: "All income types with totals fetched successfully",
           data: incomeList,
           total,
-          page: Number(page),
-          limit: Number(limit),
+          page,
+          limit: limit || total,
         });
       }
 
-      // If income_type is provided, return all transactions of that type (paginated) and the total income for that type
       const filter = { income_type };
       const total = await Transaction.countDocuments(filter);
-      const transactions = await Transaction.find(filter)
-        .skip(skip)
-        .limit(Number(limit));
-      const totalIncomeAgg = await Transaction.aggregate([
-        { $match: filter },
-        { $group: { _id: null, totalIncome: { $sum: "$amount" } } }
-      ]);
-      const totalIncome = totalIncomeAgg[0]?.totalIncome?.toFixed(2) || "0.00";
+
+      let transactionsQuery = Transaction.find(filter);
+      if (limit && limit > 0) transactionsQuery = transactionsQuery.skip(skip).limit(limit);
+      const transactions = await transactionsQuery;
 
       // --- Add user info to each transaction ---
       const userIds = [...new Set(transactions.map(tx => tx.user_id))];
@@ -336,27 +343,33 @@ module.exports = {
   },
   async getTotalIncomeForUser(req, res) {
     try {
-      const { income_type } = req.query;
-      const { user_id } = req.query;
-        if (!income_type) {
-          return res.status(400).json({
-            success: false,
-            message: "Income type is required",
-          });
-        }
-        if (!user_id) { 
-          return res.status(400).json({
-            success: false,
-            message: "User ID is required",
-          });
-        }
-      const { page = 1, limit = 10 } = req.query;
-      const skip = (page - 1) * limit;
-      const filter = { user_id, income_type: income_type };
+      const { income_type, user_id } = req.query;
+      if (!income_type) {
+        return res.status(400).json({
+          success: false,
+          message: "Income type is required",
+        });
+      }
+      if (!user_id) {
+        return res.status(400).json({
+          success: false,
+          message: "User ID is required",
+        });
+      }
+
+      let { page = 1, limit } = req.query;
+      page = Number(page);
+      limit = limit !== undefined ? Number(limit) : undefined;
+      let skip = 0;
+      if (limit && limit > 0) skip = (page - 1) * limit;
+
+      const filter = { user_id, income_type };
       const total = await Transaction.countDocuments(filter);
-      const transactions = await Transaction.find(filter)
-        .skip(skip)
-        .limit(Number(limit));
+
+      let query = Transaction.find(filter);
+      if (limit && limit > 0) query = query.skip(skip).limit(limit);
+      const transactions = await query;
+
       // Fetch user info
       const user = await User.findOne({ user_id }).select('name createdAt');
       // Fetch first staking date
@@ -369,13 +382,14 @@ module.exports = {
         user_registration_date: user?.createdAt || null,
         user_activation_date: user_activation_date || null,
       }));
+
       return res.status(200).json({
         success: true,
         message: "Transactions for user fetched successfully",
         data: transactionsWithUser,
         total,
-        page: Number(page),
-        limit: Number(limit),
+        page,
+        limit: limit || total, // If no limit, return total as limit
       });
     } catch (err) {
       console.error(err);
