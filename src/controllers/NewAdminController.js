@@ -21,14 +21,19 @@ const mongoose = require("mongoose");
 const Referral = require("../models/Referral");
 const User = require("../models/User");
 
+// Utility: get skip, limit, page from query
+function getPagination(query) {
+  let page = Number(query.page) || 1;
+  let limit = query.limit !== undefined ? Number(query.limit) : undefined;
+  let skip = 0;
+  if (limit && limit > 0) skip = (page - 1) * limit;
+  return { page, limit, skip };
+}
+
 module.exports = {
   async getAllRewards(req, res) {
     try {
-      let { page = 1, limit } = req.query;
-      page = Number(page);
-      limit = limit !== undefined ? Number(limit) : undefined;
-      let skip = 0;
-      if (limit && limit > 0) skip = (page - 1) * limit;
+      const { page, limit, skip } = getPagination(req.query);
 
       let userFilter = {};
       if (req.query.search) {
@@ -38,9 +43,9 @@ module.exports = {
             { name: { $regex: userRegex } },
             { email: { $regex: userRegex } },
           ],
-        }).select('_id');
-        const userIds = matchingUsers.map(u => u._id);
-        userFilter.user = { $in: userIds };
+        }).select('user_id');
+        const userIds = matchingUsers.map(u => u.user_id);
+        userFilter.user_id = { $in: userIds };
       }
 
       const rewardFilter = {
@@ -124,8 +129,8 @@ module.exports = {
         data: rewardsData,
         total,
         totalIncome,
-        page: Number(page),
-        limit: Number(limit),
+        page,
+        limit: limit || total,
       });
     } catch (err) {
       console.error(err);
@@ -137,24 +142,19 @@ module.exports = {
   },
   async getRewardForUser(req, res) {
     try {
-      let { user_id, page = 1, limit } = req.query;
-      page = Number(page);
-      limit = limit !== undefined ? Number(limit) : undefined;
-      let skip = 0;
-      if (limit && limit > 0) skip = (page - 1) * limit;
+      const { page, limit, skip } = getPagination(req.query);
+      const { user_id } = req.query;
 
-      const user = await User.findOne({ user_id: user_id });
+      const user = await User.findOne({ user_id });
       if (!user) {
         return res.status(404).json({
           success: false,
           message: "User not found",
         });
       }
-      const userName = user.name;
-      const userEmail = user.email;
 
       // Get user's first staking date
-      const firstStaking = await Staking.findOne({ user_id: user_id }).sort({ createdAt: 1 });
+      const firstStaking = await Staking.findOne({ user_id }).sort({ createdAt: 1 });
       const userActivationDate = firstStaking ? firstStaking.createdAt.toLocaleString() : null;
 
       const filter = { user_id, income_type: "sng_rewards" };
@@ -167,8 +167,8 @@ module.exports = {
       // Attach user_name, user_email, and user_activation_date to each reward
       const rewardsData = reward.map(r => ({
         ...r.toObject(),
-        user_name: userName,
-        user_email: userEmail,
+        user_name: user.name,
+        user_email: user.email,
         user_activation_date: userActivationDate,
       }));
       // Calculate total income for this user
@@ -183,8 +183,8 @@ module.exports = {
         data: rewardsData,
         total,
         totalIncome,
-        page: Number(page),
-        limit: Number(limit),
+        page,
+        limit: limit || total,
       });
     } catch (err) {
       console.error(err);
@@ -196,11 +196,7 @@ module.exports = {
   },
   async getBoosterIncome(req, res) {
     try {
-      let { page = 1, limit } = req.query;
-      page = Number(page);
-      limit = limit !== undefined ? Number(limit) : undefined;
-      let skip = 0;
-      if (limit && limit > 0) skip = (page - 1) * limit;
+      const { page, limit, skip } = getPagination(req.query);
 
       let crownStakingsQuery = Staking.find({ roi: 1 });
       if (limit && limit > 0) crownStakingsQuery = crownStakingsQuery.skip(skip).limit(limit);
@@ -243,8 +239,8 @@ module.exports = {
         success: true,
         message: "Booster income fetched successfully",
         data: boosterEligibleUsers,
-        page: Number(page),
-        limit: Number(limit),
+        page,
+        limit: limit || total,
         boosterEligibleUserCount: userIds.length,
         total
       });
@@ -258,9 +254,8 @@ module.exports = {
   },
   async getTotalIncome(req, res) {
     try {
-      let { income_type, page = 1, limit } = req.query;
-      let skip = 0;
-      if (limit && limit > 0) skip = (page - 1) * limit;
+      const { page, limit, skip } = getPagination(req.query);
+      let { income_type } = req.query;
 
       if (!income_type) {
         let incomeListAgg = Transaction.aggregate([
@@ -335,8 +330,8 @@ module.exports = {
         data: transactionsWithUser,
         total,
         totalIncome,
-        page: Number(page),
-        limit: Number(limit),
+        page,
+        limit: limit || total,
       });
     } catch (err) {
       console.error(err);
@@ -348,6 +343,7 @@ module.exports = {
   },
   async getTotalIncomeForUser(req, res) {
     try {
+      const { page, limit, skip } = getPagination(req.query);
       const { income_type, user_id } = req.query;
       if (!income_type) {
         return res.status(400).json({
@@ -361,12 +357,6 @@ module.exports = {
           message: "User ID is required",
         });
       }
-
-      let { page = 1, limit } = req.query;
-      page = Number(page);
-      limit = limit !== undefined ? Number(limit) : undefined;
-      let skip = 0;
-      if (limit && limit > 0) skip = (page - 1) * limit;
 
       const filter = { user_id, income_type };
       const total = await Transaction.countDocuments(filter);
@@ -394,7 +384,7 @@ module.exports = {
         data: transactionsWithUser,
         total,
         page,
-        limit: limit || total, // If no limit, return total as limit
+        limit: limit || total,
       });
     } catch (err) {
       console.error(err);
