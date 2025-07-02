@@ -22,18 +22,18 @@ const Referral = require("../models/Referral");
 const User = require("../models/User");
 
 // Utility: get skip, limit, page from query
-function getPagination(query) {
-  let page = Number(query.page) || 1;
-  let limit = query.limit !== undefined ? Number(query.limit) : undefined;
-  let skip = 0;
-  if (limit && limit > 0) skip = (page - 1) * limit;
-  return { page, limit, skip };
-}
+// function getPagination(query) {
+//   let page = Number(query.page) || 1;
+//   let limit = query.limit !== undefined ? Number(query.limit) : undefined;
+//   let skip = 0;
+//   if (limit && limit > 0) skip = (page - 1) * limit;
+//   return { page, limit, skip };
+// }
 
 module.exports = {
   async getAllRewards(req, res) {
     try {
-      const { page, limit, skip } = getPagination(req.query);
+      // const { page, limit, skip } = getPagination(req.query);
 
       let userFilter = {};
       if (req.query.search) {
@@ -57,7 +57,7 @@ module.exports = {
       const total = await Transaction.countDocuments(rewardFilter);
 
       let rewardsQuery = Transaction.find(rewardFilter).sort({ createdAt: -1 });
-      if (limit && limit > 0) rewardsQuery = rewardsQuery.skip(skip).limit(limit);
+      // if (limit && limit > 0) rewardsQuery = rewardsQuery.skip(skip).limit(limit);
       const rewards = await rewardsQuery;
 
       // Get unique user IDs from rewards
@@ -128,9 +128,7 @@ module.exports = {
         message: "Rewards fetched successfully",
         data: rewardsData,
         total,
-        totalIncome,
-        page,
-        limit: limit || total,
+        totalIncome
       });
     } catch (err) {
       console.error(err);
@@ -142,7 +140,7 @@ module.exports = {
   },
   async getRewardForUser(req, res) {
     try {
-      const { page, limit, skip } = getPagination(req.query);
+      // const { page, limit, skip } = getPagination(req.query);
       const { user_id } = req.query;
 
       const user = await User.findOne({ user_id });
@@ -161,7 +159,7 @@ module.exports = {
       const total = await Transaction.countDocuments(filter);
 
       let rewardQuery = Transaction.find(filter);
-      if (limit && limit > 0) rewardQuery = rewardQuery.skip(skip).limit(limit);
+      // if (limit && limit > 0) rewardQuery = rewardQuery.skip(skip).limit(limit);
       const reward = await rewardQuery;
 
       // Attach user_name, user_email, and user_activation_date to each reward
@@ -182,9 +180,7 @@ module.exports = {
         message: "Reward fetched successfully",
         data: rewardsData,
         total,
-        totalIncome,
-        page,
-        limit: limit || total,
+        totalIncome
       });
     } catch (err) {
       console.error(err);
@@ -196,10 +192,10 @@ module.exports = {
   },
   async getBoosterIncome(req, res) {
     try {
-      const { page, limit, skip } = getPagination(req.query);
+      // const { page, limit, skip } = getPagination(req.query);
 
       let crownStakingsQuery = Staking.find({ roi: 1 });
-      if (limit && limit > 0) crownStakingsQuery = crownStakingsQuery.skip(skip).limit(limit);
+      // if (limit && limit > 0) crownStakingsQuery = crownStakingsQuery.skip(skip).limit(limit);
       const crownStakings = await crownStakingsQuery;
 
       // Booster eligible users (roi = 1 in Staking)
@@ -239,8 +235,6 @@ module.exports = {
         success: true,
         message: "Booster income fetched successfully",
         data: boosterEligibleUsers,
-        page,
-        limit: limit || total,
         boosterEligibleUserCount: userIds.length,
         total
       });
@@ -254,7 +248,7 @@ module.exports = {
   },
   async getTotalIncome(req, res) {
     try {
-      const { page, limit, skip } = getPagination(req.query);
+      // const { page, limit, skip } = getPagination(req.query);
       let { income_type } = req.query;
 
       if (!income_type) {
@@ -273,16 +267,14 @@ module.exports = {
             }
           }
         ]);
-        if (limit && limit > 0) incomeListAgg = incomeListAgg.skip(skip).limit(limit);
+        // if (limit && limit > 0) incomeListAgg = incomeListAgg.skip(skip).limit(limit);
         const incomeList = await incomeListAgg;
         const total = incomeList.length;
         return res.status(200).json({
           success: true,
           message: "All income types with totals fetched successfully",
           data: incomeList,
-          total,
-          page,
-          limit: limit || total,
+          total
         });
       }
 
@@ -290,7 +282,7 @@ module.exports = {
       const total = await Transaction.countDocuments(filter);
 
       let transactionsQuery = Transaction.find(filter);
-      if (limit && limit > 0) transactionsQuery = transactionsQuery.skip(skip).limit(limit);
+      // if (limit && limit > 0) transactionsQuery = transactionsQuery.skip(skip).limit(limit);
       const transactions = await transactionsQuery;
 
       // --- Add user info to each transaction ---
@@ -329,9 +321,7 @@ module.exports = {
         message: "Transactions for income type fetched successfully",
         data: transactionsWithUser,
         total,
-        totalIncome,
-        page,
-        limit: limit || total,
+        totalIncome
       });
     } catch (err) {
       console.error(err);
@@ -343,7 +333,7 @@ module.exports = {
   },
   async getTotalIncomeForUser(req, res) {
     try {
-      const { page, limit, skip } = getPagination(req.query);
+      // const { page, limit, skip } = getPagination(req.query);
       const { income_type, user_id } = req.query;
       if (!income_type) {
         return res.status(400).json({
@@ -362,7 +352,7 @@ module.exports = {
       const total = await Transaction.countDocuments(filter);
 
       let query = Transaction.find(filter);
-      if (limit && limit > 0) query = query.skip(skip).limit(limit);
+      // if (limit && limit > 0) query = query.skip(skip).limit(limit);
       const transactions = await query;
 
       // Fetch user info
@@ -382,9 +372,7 @@ module.exports = {
         success: true,
         message: "Transactions for user fetched successfully",
         data: transactionsWithUser,
-        total,
-        page,
-        limit: limit || total,
+        total
       });
     } catch (err) {
       console.error(err);

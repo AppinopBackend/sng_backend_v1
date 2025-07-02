@@ -638,17 +638,27 @@ module.exports = {
                 return acc;
             }, {});
             
+            // Fetch first staking date for each user
+            const firstStakingDates = await Staking.aggregate([
+                { $match: { user_id: { $in: userIds } } },
+                { $group: { _id: "$user_id", firstStakingDate: { $min: "$createdAt" } } }
+            ]);
+            const stakingDateMap = {};
+            firstStakingDates.forEach(item => {
+                stakingDateMap[item._id] = item.firstStakingDate;
+            });
+            
             tranferHistory = tranferHistory.map(item => {
                 return {
                     ...item._doc,
-                    user_name: userMap[item.user_id]
+                    user_name: userMap[item.user_id],
+                    user_activation_date: stakingDateMap[item.user_id] || null
                 };
             });
             return res.status(200).json({ success : true, message : "Admin Fund Transfer History Fetched", data : tranferHistory})
         } catch (error) {
             return res.status(500).json({ success: false, message: error.message, data: [] });
         }
-
     },
 
     pendingWithdrawalRequest: async (req, res) => {
