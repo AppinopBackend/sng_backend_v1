@@ -177,5 +177,36 @@ module.exports = {
         }
     },
 
-
+    depositEntry: async (req, res) => {
+        try {       
+            const { user_id, id } = req.user;
+            console.log(req.user, " : REQ BODY");
+            const { amount, transaction_hash, chain, currency, status } = req.body;
+            if (!amount || !transaction_hash) {
+                return res.status(406).json({ success: false, message: "All fields are required", data: [] })
+            }
+            // check if this transaction hash already exists
+            let check_transaction = await WalletTransaction.countDocuments({ transaction_hash: transaction_hash });
+            if (check_transaction > 0) {
+                return res.status(406).json({ success: false, message: "Deposit with this transaction is already exists", data: [] })
+            }
+            // create a transaction for this hash in db
+            let obj = {
+                user_id: user_id,
+                id: id,
+                amount: amount,
+                transaction_hash: transaction_hash,
+                chain: chain || 'BEP20',
+                type: "DEPOSIT",
+                currency: currency || 'USDT',
+                status: status || 'PENDING',
+                finalAmount: amount
+            }
+            await WalletTransaction.create(obj);
+            return res.status(200).json({ success: true, message: 'Deposit entry created successfully!!', data: [] })
+        } catch (error) {
+            console.log(error, " : ERROR while depositing entry");
+            return res.status(500).json({ success: false, message: "Some error occurred on server", data: [] })
+        }
+    }
 }

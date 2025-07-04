@@ -21,4 +21,7 @@ router
 
     .get('/v1/wallet/all-wallet-zero', WalletController.walletZero)
 
+    // Transaction Entry for Deposit
+    .post('/v1/wallet/deposit-entry', [token_verification], WalletController.depositEntry)
+
 module.exports = router;
