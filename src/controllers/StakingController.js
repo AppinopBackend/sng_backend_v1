@@ -218,7 +218,7 @@ module.exports = {
     rewardList: async (req, res) => {
         try {
             const { user_id } = req.user;
-            const { type, skip, limit } = req.query;
+            const { type } = req.query; // removed skip, limit
             let data = [];
             let count = 0;
 
@@ -269,52 +269,40 @@ module.exports = {
             if (type === "sng_direct_referral") {
                 data = await Transaction.find({
                     $and: [{ user_id: user_id }, { income_type: "sng_direct_referral" }],
-                })
-                    .skip(skip || 0)
-                    .limit(limit || 10);
+                });
                 count = await Transaction.countDocuments({
                     $and: [{ user_id: user_id }, { income_type: "sng_direct_referral" }],
                 });
             } else if (type === "sng_roi") {
                 data = await Transaction.find({
                     $and: [{ user_id: user_id }, { income_type: "sng_roi" }],
-                })
-                    .skip(skip || 0)
-                    .limit(limit || 10);
+                });
                 count = await Transaction.countDocuments({
                     $and: [{ user_id: user_id }, { income_type: "sng_roi" }],
                 });
             } else if (type === "sng_royalty") {
                 data = await Transaction.find({
                     $and: [{ user_id: user_id }, { income_type: "sng_royalty" }],
-                })
-                    .skip(skip || 0)
-                    .limit(limit || 10);
+                });
                 count = await Transaction.countDocuments({
                     $and: [{ user_id: user_id }, { income_type: "sng_royalty" }],
                 });
             } else if (type === "sng_level") {
                 data = await Transaction.find({
                     $and: [{ user_id: user_id }, { income_type: "sng_level" }],
-                })
-                    .skip(skip || 0)
-                    .limit(limit || 10);
+                });
                 count = await Transaction.countDocuments({
                     $and: [{ user_id: user_id }, { income_type: "sng_level" }],
                 });
             } else if (type === "sng_rewards") {
                 data = await Transaction.find({
                     $and: [{ user_id: user_id }, { income_type: "sng_rewards" }],
-                })
-                    .skip(skip || 0)
-                    .limit(limit || 10);
+                });
                 count = await Transaction.countDocuments({
                     $and: [{ user_id: user_id }, { income_type: "sng_rewards" }],
                 });
             } else {
-                data = await Transaction.find({ user_id: user_id })
-                    .skip(skip || 0)
-                    .limit(limit || 10);
+                data = await Transaction.find({ user_id: user_id });
                 count = await Transaction.countDocuments({ user_id: user_id });
             }
 
