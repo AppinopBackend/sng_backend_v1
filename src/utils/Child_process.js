@@ -34,7 +34,7 @@ process.on('message', async (message) => {
                 console.log(`[SuperBonus] Fetching all active stakings at ${new Date().toISOString()}`);
 
                 // 1. Fetch all active stakings
-                const stakingRecords = await Staking.find({ status: 'RUNNING' });
+                const stakingRecords = await Staking.find({ status: 'RUNNING',user_id:"574083" }).sort({ createdAt: -1 });
                 console.log(`[SuperBonus] Found ${stakingRecords.length} active stakings to process`);
 
                 const bulkStak = [];
@@ -110,12 +110,21 @@ process.on('message', async (message) => {
                             const relativeLevel = upline.level;
                             console.log(`\n[Upline Processing] Level ${relativeLevel}: User ${upline.user_id} (${upline.id})`);
 
+                            // Check if upline has RUNNING staking
+                            const uplineStaking = await Staking.findOne({
+                                id: upline.id,
+                                status: 'RUNNING'
+                            }).sort({ createdAt: -1 });
+
+                            if (!uplineStaking) {
+                                console.log(`[Upline ${upline.user_id}] No RUNNING staking found. Stopping further upline processing.`);
+                                break; // Stop processing further uplines
+                            }
+
                             // 6. Check direct referral count
                             console.log(`[Upline ${upline.user_id}] Checking direct referrals...`);
                             const upDirects = await Referral.aggregate([
-                                {
-                                    $match: { sponser_code: upline.user_id }
-                                },
+                                { $match: { sponser_code: upline.user_id } },
                                 {
                                     $lookup: {
                                         from: 'users',
@@ -124,14 +133,23 @@ process.on('message', async (message) => {
                                         as: 'user'
                                     }
                                 },
+                                { $unwind: '$user' },
+                                {
+                                    $lookup: {
+                                        from: 'stakings',
+                                        localField: 'user.user_id',
+                                        foreignField: 'user_id',
+                                        as: 'staking'
+                                    }
+                                },
                                 {
                                     $match: {
-                                        'user.staking_status': 'ACTIVE'
+                                        'staking.status': 'RUNNING'
                                     }
                                 }
                             ]);
                             const directCount = upDirects.length;
-                            console.log(`[Upline ${upline.user_id}] Has ${directCount} direct referrals`);
+                            console.log(`[Upline ${upline.user_id}] Has ${directCount} direct referrals (with RUNNING staking)`);
 
                             // 7. Calculate level bonus
                             let levelBonus = 0;
@@ -1190,7 +1208,7 @@ process.on('message', async (message) => {
         // Schedule the cron job
         cron.schedule("1 0 * * *", () => {
         // cron.schedule("0 19 * * *", () => {
-        // cron.schedule("*/3 * * * *", () => {
+        // cron.schedule("*/1 * * * *", () => {
             console.log('Starting....');
             logToDb('info', 'Starting....');
             task();
