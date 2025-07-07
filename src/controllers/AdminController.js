@@ -17,6 +17,7 @@ const { JWT_SECRET, JWT_EXPIRY_TIME } = process.env;
 const mongoose = require('mongoose');
 const Referral = require('../models/Referral');
 const User = require('../models/User');
+const { getDownlineTeam2 } = require('./ReferralController');
 
 module.exports = {
     login: async(req, res) => {
@@ -304,12 +305,29 @@ module.exports = {
             // Users withdraw request
             let withdraw = await Transaction.find({$and: [{user_id: user_id}, {transaction_type: 'WITHDRAWAL'}]})
 
+            // Calculate self_business
+            let self_business = 0;
+            if (typeof getDownlineTeam2 === "function") {
+                self_business = await getDownlineTeam2(user_id);
+            }
+
+            // Calculate total_direct_business
+            let total_direct_business = 0;
+            const directs = await Referral.find({ sponser_code: user_id });
+            const directUserCodes = directs.map(d => d.user_code);
+            if (directUserCodes.length > 0) {
+                const directStakings = await Staking.find({ user_id: { $in: directUserCodes }, status: "RUNNING" });
+                total_direct_business = directStakings.reduce((sum, detail) => sum + (detail.amount || 0), 0);
+            }
+
             data = data != null ? data : []
             data.wallet = wallet ?? []
             data.staking = staking
             data.total_staking = totalStakingAmount;
             data.deposit_transaction = deposit;
             data.withdraw_transaction = withdraw;
+            data.self_business = self_business;
+            data.total_direct_business = total_direct_business;
             return res.status(200).json({success: true, message: 'User details fetched!!', data: data})
         } catch (error) {
             return res.status(500).json({success: false, message: error.message, data: []})

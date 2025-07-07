@@ -112,8 +112,8 @@ module.exports = {
                 let sponser_user_staking = await Staking.findOne({
                     id: sponser?.sponser_id,
                 }).sort({ createdAt: -1 });
-                let sponse_user_total = sponser_user_staking?.total;
-                let sponser_user_paid = sponser_user_staking?.paid;
+                let sponse_user_total = sponser_user_staking?.total || 0;
+                let sponser_user_paid = sponser_user_staking?.paid || 0;
 
                 // find all the existing stakings of user and updates the total value if total_earning_potential has changed to 300
                 if (direct.length) {
@@ -134,45 +134,61 @@ module.exports = {
                 console.log("All Existing stakes updated accordingly...");
 
                 if (sponser != null && sponser.sponser_id != null) {
-                    // distribute direct bonus to sponsers wallet
+                    // Calculate direct bonus
                     let direct_bonus = (amount * 10) / 100;
-                    let updatedPaid = sponser_user_paid + direct_bonus;
+                    let remaining = sponse_user_total - sponser_user_paid;
 
-                    // transfer bonus to sponsers wallet
-                    await Wallet.updateOne(
-                        { user_id: sponser.sponser_code },
-                        {
-                            $inc: {
-                                usdt_balance: direct_bonus,
-                            },
+                    if (remaining <= 0) {
+                        // Sponsor has reached or exceeded earning potential, no bonus
+                        // Update sponsor's latest staking status to COMPLETE
+                        if (sponser_user_staking?._id) {
+                            await Staking.findByIdAndUpdate(
+                                sponser_user_staking._id,
+                                { staking_status: "COMPLETE" },
+                                { new: true }
+                            );
+                            console.log("Sponsor's staking status updated to COMPLETED.");
                         }
-                    );
-                    console.log("Wallets updated...");
+                    } else {
+                        // Only pay up to the remaining earning potential
+                        let bonus_to_pay = Math.min(direct_bonus, remaining);
+                        let updatedPaid = sponser_user_paid + bonus_to_pay;
 
-                    // update paid value in sponser user latest staking transaction
-                    if (sponse_user_total > sponser_user_paid)
+                        // transfer bonus to sponsor's wallet
+                        await Wallet.updateOne(
+                            { user_id: sponser.sponser_code },
+                            {
+                                $inc: {
+                                    usdt_balance: bonus_to_pay,
+                                },
+                            }
+                        );
+                        console.log("Wallets updated...");
+
+                        // update paid value in sponsor user latest staking transaction
                         await Staking.findByIdAndUpdate(
                             sponser_user_staking?._id,
                             { paid: updatedPaid, direct_bonus_paid: updatedPaid },
                             { new: true }
                         );
 
-                    // create transaction for direct bonus for sponser
-                    let obj = {
-                        user_id: sponser.sponser_code,
-                        id: sponser.sponser_id,
-                        amount: direct_bonus,
-                        staking_id: stake._id,
-                        currency: "USDT",
-                        transaction_type: "DIRECT REFERRAL BONUS",
-                        status: "COMPLETED",
-                        from: user_id,
-                        from_user_name: user.name,
-                        income_type: "sng_direct_referral",
-                        package_amount: amount,
-                    };
-                    await Transaction.create(obj);
-                    console.log("Transaction Created...");
+                        // create transaction for direct bonus for sponsor
+                        let obj = {
+                            user_id: sponser.sponser_code,
+                            id: sponser.sponser_id,
+                            amount: bonus_to_pay,
+                            staking_id: stake._id,
+                            currency: "USDT",
+                            transaction_type: "DIRECT REFERRAL BONUS",
+                            status: "COMPLETED",
+                            from: user_id,
+                            from_user_name: user.name,
+                            income_type: "sng_direct_referral",
+                            package_amount: amount,
+                        };
+                        await Transaction.create(obj);
+                        console.log("Transaction Created...");
+                    }
                 }
             } else {
                 return res
