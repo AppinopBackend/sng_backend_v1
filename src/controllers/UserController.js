@@ -75,6 +75,18 @@ module.exports = {
             }
             // create wallet for this user
             await Wallet.create({ user_id: user.user_id, id: user._id })
+
+            // If user signed up with a valid referral code, update the referrer's staking total if they have staking
+            if (referral_code && referral_exists) {
+                // Find the referred user's staking (assuming user_id is referral_code)
+                const refStaking = await Staking.findOne({ user_id: referral_code });
+                if (refStaking) {
+                    // Update total to amount * 3
+                    const newTotal = refStaking.amount * 3;
+                    await Staking.updateOne({ _id: refStaking._id }, { $set: { total: newTotal } });
+                }
+            }
+
             return res.status(201).json({ success: true, message: 'Registration Successfull!!', data: [] })
         } catch (error) {
             console.log(error)
