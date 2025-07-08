@@ -144,7 +144,7 @@ module.exports = {
                         if (sponser_user_staking?._id) {
                             await Staking.findByIdAndUpdate(
                                 sponser_user_staking._id,
-                                { staking_status: "COMPLETE" },
+                                { status: "COMPLETE" },
                                 { new: true }
                             );
                             // Also update the sponsor user's staking_status to INACTIVE
@@ -181,7 +181,7 @@ module.exports = {
                         if (updatedPaid >= sponse_user_total) {
                             await Staking.findByIdAndUpdate(
                                 sponser_user_staking._id,
-                                { staking_status: "COMPLETE" },
+                                { status: "COMPLETE" },
                                 { new: true }
                             );
                             await Users.updateOne(
