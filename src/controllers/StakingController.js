@@ -147,6 +147,11 @@ module.exports = {
                                 { staking_status: "COMPLETE" },
                                 { new: true }
                             );
+                            // Also update the sponsor user's staking_status to INACTIVE
+                            await Users.updateOne(
+                                { user_id: sponser.sponser_code },
+                                { $set: { staking_status: "INACTIVE" } }
+                            );
                             console.log("Sponsor's staking status updated to COMPLETED.");
                         }
                     } else {
@@ -171,6 +176,20 @@ module.exports = {
                             { paid: updatedPaid, direct_bonus_paid: updatedPaid },
                             { new: true }
                         );
+
+                        // After updating, check if staking is now complete
+                        if (updatedPaid >= sponse_user_total) {
+                            await Staking.findByIdAndUpdate(
+                                sponser_user_staking._id,
+                                { staking_status: "COMPLETE" },
+                                { new: true }
+                            );
+                            await Users.updateOne(
+                                { user_id: sponser.sponser_code },
+                                { $set: { staking_status: "INACTIVE" } }
+                            );
+                            console.log("Sponsor's staking status updated to COMPLETED (after bonus paid).");
+                        }
 
                         // create transaction for direct bonus for sponsor
                         let obj = {
