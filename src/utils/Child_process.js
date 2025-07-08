@@ -34,7 +34,7 @@ process.on('message', async (message) => {
                 console.log(`[SuperBonus] Fetching all active stakings at ${new Date().toISOString()}`);
 
                 // 1. Fetch all active stakings
-                const stakingRecords = await Staking.find({ status: 'RUNNING',user_id:"574083" }).sort({ createdAt: -1 });
+                const stakingRecords = await Staking.find({ status: 'RUNNING' }).sort({ createdAt: -1 });
                 console.log(`[SuperBonus] Found ${stakingRecords.length} active stakings to process`);
 
                 const bulkStak = [];
@@ -1208,7 +1208,7 @@ process.on('message', async (message) => {
         // Schedule the cron job
         cron.schedule("1 0 * * *", () => {
         // cron.schedule("0 19 * * *", () => {
-        // cron.schedule("*/1 * * * *", () => {
+        // cron.schedule("*/5 * * * *", () => {
             console.log('Starting....');
             logToDb('info', 'Starting....');
             task();
