@@ -20,7 +20,7 @@ const { JWT_SECRET, JWT_EXPIRY_TIME } = process.env;
 const mongoose = require("mongoose");
 const Referral = require("../models/Referral");
 const User = require("../models/User");
-
+const { getDownlineTeam2 } = require("./ReferralController");
 // Utility: get skip, limit, page from query
 // function getPagination(query) {
 //   let page = Number(query.page) || 1;
@@ -43,8 +43,8 @@ module.exports = {
             { name: { $regex: userRegex } },
             { email: { $regex: userRegex } },
           ],
-        }).select('user_id');
-        const userIds = matchingUsers.map(u => u.user_id);
+        }).select("user_id");
+        const userIds = matchingUsers.map((u) => u.user_id);
         userFilter.user_id = { $in: userIds };
       }
 
@@ -61,26 +61,30 @@ module.exports = {
       const rewards = await rewardsQuery;
 
       // Get unique user IDs from rewards
-      const userIds = [...new Set(rewards.map(reward => reward.user_id))];
-      
+      const userIds = [...new Set(rewards.map((reward) => reward.user_id))];
+
       // Fetch user data for all users
-      const users = await User.find({ user_id: { $in: userIds } }).select('user_id name');
+      const users = await User.find({ user_id: { $in: userIds } }).select(
+        "user_id name"
+      );
       const userMap = {};
-      users.forEach(user => {
+      users.forEach((user) => {
         userMap[user.user_id] = user.name;
       });
 
       // Fetch first staking dates for all users
       const firstStakingDates = await Staking.aggregate([
         { $match: { user_id: { $in: userIds } } },
-        { $group: { 
-          _id: "$user_id", 
-          firstStakingDate: { $min: "$createdAt" } 
-        }}
+        {
+          $group: {
+            _id: "$user_id",
+            firstStakingDate: { $min: "$createdAt" },
+          },
+        },
       ]);
-      
+
       const stakingDateMap = {};
-      firstStakingDates.forEach(item => {
+      firstStakingDates.forEach((item) => {
         stakingDateMap[item._id] = item.firstStakingDate;
       });
 
@@ -89,7 +93,9 @@ module.exports = {
           id: reward._id,
           user_id: reward.user_id,
           user_name: userMap[reward.user_id] || null,
-          user_activation_date: stakingDateMap[reward.user_id] ? stakingDateMap[reward.user_id].toLocaleString() : null,
+          user_activation_date: stakingDateMap[reward.user_id]
+            ? stakingDateMap[reward.user_id].toLocaleString()
+            : null,
           amount: reward.amount,
           staking_id: reward.staking_id,
           from: reward.from,
@@ -111,15 +117,19 @@ module.exports = {
           metadata: reward.metadata,
           from_user_id: reward.from_user_id,
           from_user_name: reward.from_user_name,
-          createdAt: reward.createdAt ? reward.createdAt.toLocaleString() : null,
-          updatedAt: reward.updatedAt ? reward.updatedAt.toLocaleString() : null,
+          createdAt: reward.createdAt
+            ? reward.createdAt.toLocaleString()
+            : null,
+          updatedAt: reward.updatedAt
+            ? reward.updatedAt.toLocaleString()
+            : null,
         };
       });
 
       // Calculate total income from rewards
       const totalIncomeAgg = await Transaction.aggregate([
         { $match: rewardFilter },
-        { $group: { _id: null, totalIncome: { $sum: "$amount" } } }
+        { $group: { _id: null, totalIncome: { $sum: "$amount" } } },
       ]);
       const totalIncome = totalIncomeAgg[0]?.totalIncome || 0;
 
@@ -128,7 +138,7 @@ module.exports = {
         message: "Rewards fetched successfully",
         data: rewardsData,
         total,
-        totalIncome
+        totalIncome,
       });
     } catch (err) {
       console.error(err);
@@ -152,8 +162,12 @@ module.exports = {
       }
 
       // Get user's first staking date
-      const firstStaking = await Staking.findOne({ user_id }).sort({ createdAt: 1 });
-      const userActivationDate = firstStaking ? firstStaking.createdAt.toLocaleString() : null;
+      const firstStaking = await Staking.findOne({ user_id }).sort({
+        createdAt: 1,
+      });
+      const userActivationDate = firstStaking
+        ? firstStaking.createdAt.toLocaleString()
+        : null;
 
       const filter = { user_id, income_type: "sng_rewards" };
       const total = await Transaction.countDocuments(filter);
@@ -163,7 +177,7 @@ module.exports = {
       const reward = await rewardQuery;
 
       // Attach user_name, user_email, and user_activation_date to each reward
-      const rewardsData = reward.map(r => ({
+      const rewardsData = reward.map((r) => ({
         ...r.toObject(),
         user_name: user.name,
         user_email: user.email,
@@ -172,7 +186,7 @@ module.exports = {
       // Calculate total income for this user
       const totalIncomeAgg = await Transaction.aggregate([
         { $match: filter },
-        { $group: { _id: null, totalIncome: { $sum: "$amount" } } }
+        { $group: { _id: null, totalIncome: { $sum: "$amount" } } },
       ]);
       const totalIncome = totalIncomeAgg[0]?.totalIncome || 0;
       return res.status(200).json({
@@ -180,7 +194,7 @@ module.exports = {
         message: "Reward fetched successfully",
         data: rewardsData,
         total,
-        totalIncome
+        totalIncome,
       });
     } catch (err) {
       console.error(err);
@@ -199,44 +213,50 @@ module.exports = {
       const crownStakings = await crownStakingsQuery;
 
       // Booster eligible users (roi = 1 in Staking)
-      const userIds = [...new Set(crownStakings.map(s => s.user_id))];
-      
+      const userIds = [...new Set(crownStakings.map((s) => s.user_id))];
+
       // Fetch user data for all booster eligible users
-      const users = await User.find({ user_id: { $in: userIds } }).select('user_id name');
+      const users = await User.find({ user_id: { $in: userIds } }).select(
+        "user_id name"
+      );
       const userMap = {};
-      users.forEach(user => {
+      users.forEach((user) => {
         userMap[user.user_id] = user.name;
       });
 
       // Fetch first staking dates for all users
       const firstStakingDates = await Staking.aggregate([
         { $match: { user_id: { $in: userIds } } },
-        { $group: { 
-          _id: "$user_id", 
-          firstStakingDate: { $min: "$createdAt" } 
-        }}
+        {
+          $group: {
+            _id: "$user_id",
+            firstStakingDate: { $min: "$createdAt" },
+          },
+        },
       ]);
-      
+
       const stakingDateMap = {};
-      firstStakingDates.forEach(item => {
+      firstStakingDates.forEach((item) => {
         stakingDateMap[item._id] = item.firstStakingDate;
       });
 
       // Add user_name and user_activation_date to each staking record
-      const boosterEligibleUsers = crownStakings.map(stake => ({
+      const boosterEligibleUsers = crownStakings.map((stake) => ({
         ...stake._doc,
         user_name: userMap[stake.user_id] || null,
-        user_activation_date: stakingDateMap[stake.user_id] ? stakingDateMap[stake.user_id].toLocaleString() : null,
+        user_activation_date: stakingDateMap[stake.user_id]
+          ? stakingDateMap[stake.user_id].toLocaleString()
+          : null,
       }));
-      
-      const total = await Staking.countDocuments({ roi: 1 }); 
-      
+
+      const total = await Staking.countDocuments({ roi: 1 });
+
       return res.status(200).json({
         success: true,
         message: "Booster income fetched successfully",
         data: boosterEligibleUsers,
         boosterEligibleUserCount: userIds.length,
-        total
+        total,
       });
     } catch (err) {
       console.error(err);
@@ -256,16 +276,16 @@ module.exports = {
           {
             $group: {
               _id: "$income_type",
-              totalIncome: { $sum: "$amount" }
-            }
+              totalIncome: { $sum: "$amount" },
+            },
           },
           {
             $project: {
               _id: 0,
               income_type: "$_id",
-              totalIncome: { $round: ["$totalIncome", 2] }
-            }
-          }
+              totalIncome: { $round: ["$totalIncome", 2] },
+            },
+          },
         ]);
         // if (limit && limit > 0) incomeListAgg = incomeListAgg.skip(skip).limit(limit);
         const incomeList = await incomeListAgg;
@@ -274,7 +294,7 @@ module.exports = {
           success: true,
           message: "All income types with totals fetched successfully",
           data: incomeList,
-          total
+          total,
         });
       }
 
@@ -286,23 +306,30 @@ module.exports = {
       const transactions = await transactionsQuery;
 
       // --- Add user info to each transaction ---
-      const userIds = [...new Set(transactions.map(tx => tx.user_id))];
-      const users = await User.find({ user_id: { $in: userIds } }).select('user_id name createdAt');
+      const userIds = [...new Set(transactions.map((tx) => tx.user_id))];
+      const users = await User.find({ user_id: { $in: userIds } }).select(
+        "user_id name createdAt"
+      );
       const userMap = {};
-      users.forEach(user => {
-        userMap[user.user_id] = { name: user.name, registration_date: user.createdAt };
+      users.forEach((user) => {
+        userMap[user.user_id] = {
+          name: user.name,
+          registration_date: user.createdAt,
+        };
       });
       // Fetch first staking dates for all users
       const firstStakingDates = await Staking.aggregate([
         { $match: { user_id: { $in: userIds } } },
-        { $group: { _id: "$user_id", firstStakingDate: { $min: "$createdAt" } } }
+        {
+          $group: { _id: "$user_id", firstStakingDate: { $min: "$createdAt" } },
+        },
       ]);
       const stakingDateMap = {};
-      firstStakingDates.forEach(item => {
+      firstStakingDates.forEach((item) => {
         stakingDateMap[item._id] = item.firstStakingDate;
       });
       // Attach user info to each transaction
-      const transactionsWithUser = transactions.map(tx => ({
+      const transactionsWithUser = transactions.map((tx) => ({
         ...tx.toObject(),
         user_name: userMap[tx.user_id]?.name || null,
         user_registration_date: userMap[tx.user_id]?.registration_date || null,
@@ -312,7 +339,7 @@ module.exports = {
       // Calculate total income for this income_type
       const totalIncomeAgg = await Transaction.aggregate([
         { $match: filter },
-        { $group: { _id: null, totalIncome: { $sum: "$amount" } } }
+        { $group: { _id: null, totalIncome: { $sum: "$amount" } } },
       ]);
       const totalIncome = totalIncomeAgg[0]?.totalIncome || 0;
 
@@ -321,7 +348,7 @@ module.exports = {
         message: "Transactions for income type fetched successfully",
         data: transactionsWithUser,
         total,
-        totalIncome
+        totalIncome,
       });
     } catch (err) {
       console.error(err);
@@ -356,12 +383,14 @@ module.exports = {
       const transactions = await query;
 
       // Fetch user info
-      const user = await User.findOne({ user_id }).select('name createdAt');
+      const user = await User.findOne({ user_id }).select("name createdAt");
       // Fetch first staking date
-      const firstStaking = await Staking.findOne({ user_id }).sort({ createdAt: 1 });
+      const firstStaking = await Staking.findOne({ user_id }).sort({
+        createdAt: 1,
+      });
       const user_activation_date = firstStaking ? firstStaking.createdAt : null;
       // Attach user info to each transaction
-      const transactionsWithUser = transactions.map(tx => ({
+      const transactionsWithUser = transactions.map((tx) => ({
         ...tx.toObject(),
         user_name: user?.name || null,
         user_registration_date: user?.createdAt || null,
@@ -372,7 +401,7 @@ module.exports = {
         success: true,
         message: "Transactions for user fetched successfully",
         data: transactionsWithUser,
-        total
+        total,
       });
     } catch (err) {
       console.error(err);
@@ -386,27 +415,38 @@ module.exports = {
     try {
       const { id, index } = req.query;
       const members = await Referral.find({ sponser_id: id });
-      const userIds = members.map(member => member.user_id);
-      const userCodes = members.map(member => member.user_code);
-      
-      const users = await Users.find({ _id: { $in: userIds } }, { password: 0, ranks: 0 }).lean();
-      const stacking_details = await Staking.find({ user_id: { $in: userCodes } });
+      const userIds = members.map((member) => member.user_id);
+      const userCodes = members.map((member) => member.user_code);
+
+      const users = await Users.find(
+        { _id: { $in: userIds } },
+        { password: 0, ranks: 0 }
+      ).lean();
+      const stacking_details = await Staking.find({
+        user_id: { $in: userCodes },
+      });
 
       // Calculate total package amount for all direct referrals
       const totalPackageAmount = stacking_details
-        .filter(detail => detail.status === "RUNNING")
+        .filter((detail) => detail.status === "RUNNING")
         .reduce((sum, detail) => sum + (detail.amount || 0), 0);
 
       // Create a map to hold the running staking package count for each user
       const selfBusinessMap = {};
 
       // Helper function to get downline team business (simulate getDownlineTeam2)
-      async function getDownlineTeam2(userId) { 
-        const directRefs = await Referral.find({ sponser_code: userId });
-        const directUserCodes = directRefs.map(d => d.user_code);
-        const directStakings = await Staking.find({ user_id: { $in: directUserCodes }, status: "RUNNING" });
-        return directStakings.reduce((sum, detail) => sum + (detail.amount || 0), 0);
-      }
+      // async function getDownlineTeam2(userId) {
+      //   const directRefs = await Referral.find({ sponser_code: userId });
+      //   const directUserCodes = directRefs.map((d) => d.user_code);
+      //   const directStakings = await Staking.find({
+      //     user_id: { $in: directUserCodes },
+      //     status: "RUNNING",
+      //   });
+      //   return directStakings.reduce(
+      //     (sum, detail) => sum + (detail.amount || 0),
+      //     0
+      //   );
+      // }
 
       for await (const userId of userIds) {
         const selfBusiness = await getDownlineTeam2(userId);
@@ -414,41 +454,49 @@ module.exports = {
       }
 
       // Map users with additional data including staking amount
-      const data = await Promise.all(users.map(async user => {
-        // Find direct referrals for this user
-        const directs = await Referral.find({ sponser_code: user.user_id });
-        const directUserCodes = directs.map(d => d.user_code);
+      const data = await Promise.all(
+        users.map(async (user) => {
+          // Find direct referrals for this user
+          const directs = await Referral.find({ sponser_code: user.user_id });
+          const directUserCodes = directs.map((d) => d.user_code);
 
-        // Sum self staking of all direct referrals (status RUNNING)
-        let userDirectBusiness = 0;
-        if (directUserCodes.length > 0) {
-          const directStakings = await Staking.find({ user_id: { $in: directUserCodes }, status: "RUNNING" });
-          userDirectBusiness = directStakings.reduce((sum, detail) => sum + (detail.amount || 0), 0);
-        }
+          // Sum self staking of all direct referrals (status RUNNING)
+          let userDirectBusiness = 0;
+          if (directUserCodes.length > 0) {
+            const directStakings = await Staking.find({
+              user_id: { $in: directUserCodes },
+              status: "RUNNING",
+            });
+            userDirectBusiness = directStakings.reduce(
+              (sum, detail) => sum + (detail.amount || 0),
+              0
+            );
+          }
 
-        return {
-          ...user,
-          id: user._id,
-          sponser_id: id,
-          index: index,
-          staking_status: user.staking_status || 'INACTIVE',
-          self_business: selfBusinessMap[user._id] || 0,
-          total_direct_business: userDirectBusiness,
-          user_registration_date: user.createdAt,
-        };
-      }));
+          return {
+            ...user,
+            id: user._id,
+            sponser_id: id,
+            index: index,
+            staking_status: user.staking_status || "INACTIVE",
+            self_business: selfBusinessMap[user._id] || 0,
+            total_direct_business: userDirectBusiness,
+            user_registration_date: user.createdAt,
+          };
+        })
+      );
 
       return res.status(200).json({
         success: true,
-        message: 'Direct referred fetched (admin)!!',
+        message: "Direct referred fetched (admin)!!",
         data: data,
-        total_package_amount: totalPackageAmount
+        total_package_amount: totalPackageAmount,
       });
     } catch (error) {
       return res.status(500).json({
         success: false,
         message: error.message,
-        data: []
+        data: [],
       });
     }
   },
