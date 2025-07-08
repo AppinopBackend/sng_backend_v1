@@ -306,10 +306,7 @@ module.exports = {
             let withdraw = await Transaction.find({$and: [{user_id: user_id}, {transaction_type: 'WITHDRAWAL'}]})
 
             // Calculate self_business
-            let self_business = 0;
-            if (typeof getDownlineTeam2 === "function") {
-                self_business = await getDownlineTeam2(user_id);
-            }
+            let self_business = await getDownlineTeam2(data._id.toString());
 
             // Calculate total_direct_business
             let total_direct_business = 0;
@@ -326,7 +323,7 @@ module.exports = {
             data.total_staking = totalStakingAmount;
             data.deposit_transaction = deposit;
             data.withdraw_transaction = withdraw;
-            data.self_business = self_business;
+            data.self_business = self_business || 0;
             data.total_direct_business = total_direct_business;
             return res.status(200).json({success: true, message: 'User details fetched!!', data: data})
         } catch (error) {
