@@ -737,52 +737,54 @@ module.exports = {
 
     addUserStacking: async (req, res) => {
         try {
+            const rankOrder = ["SILVER", "GOLD", "PLATINUM", "DIAMOND", "CROWN"];
             const { user_id, amount } = req.body;
 
-            // Define rank hierarchy
-            const rankOrder = ["SILVER", "GOLD", "PLATINUM", "DIAMOND", "CROWN"];
-
-            // Check if the amount is greater than or equal to 100
-            if (amount < 100) return res.status(400).json({ success: false, message: "Staking amount must be greater than 100", data: [] });
-
-            // Check if the user exists
-            let user = await Users.findOne({ user_id: user_id });
-            if (!user) {
-                return res.status(404).json({ success: false, message: "User not found", data: [] });
-            }
-            console.log(user, "User Log");
+            // Check if amount is greater than or equal to 100
+            if (amount < 100)
+                return res.status(400).json({
+                    success: false,
+                    message: "Staking amount must be greater than 100",
+                    data: [],
+                });
 
             // Check if user has enough balance in the wallet
             let userbalance = await Wallet.findOne({ user_id: user_id });
-            if (userbalance === null || userbalance.usdt_balance < amount) {
-                return res.status(406).json({ success: false, message: 'Insufficient Wallet Balance', data: [] });
-            }
+            let user = await Users.findOne({ user_id: user_id });
+            if (userbalance === null || userbalance.usdt_balance < amount)
+                return res.status(406).json({
+                    success: false,
+                    message: "Insufficient Wallet Balance",
+                    data: [],
+                });
 
             // Deduct balance from user's wallet
             let deduct = await Wallet.updateOne(
                 { user_id: user_id },
                 { $inc: { usdt_balance: -amount } }
             );
-            if (!deduct || deduct.modifiedCount === 0) {
-                return res.status(400).json({ success: false, message: "Unable to deduct user wallet balance", data: [] });
-            }
+            if (!deduct || deduct.modifiedCount === 0)
+                return res.status(400).json({
+                    success: false,
+                    message: "Unable to deduct user wallet balance",
+                    data: [],
+                });
 
             // ROI and rank logic
             let roi_value, rank;
-            if (amount >= 100 && amount <= 500) roi_value = 0.5, rank = "SILVER";
-            else if (amount >= 501 && amount <= 1000) roi_value = 0.6, rank = "GOLD";
-            else if (amount >= 1001 && amount <= 2500) roi_value = 0.7, rank = "PLATINUM";
-            else if (amount >= 2501 && amount <= 5000) roi_value = 0.8, rank = "DIAMOND";
-            else if (amount >= 5001) roi_value = 1, rank = "CROWN";
+            if (amount >= 100 && amount <= 500) (roi_value = 0.5), (rank = "SILVER");
+            else if (amount >= 501 && amount <= 1000) (roi_value = 0.6), (rank = "GOLD");
+            else if (amount >= 1001 && amount <= 2500) (roi_value = 0.7), (rank = "PLATINUM");
+            else if (amount >= 2501 && amount <= 5000) (roi_value = 0.8), (rank = "DIAMOND");
+            else if (amount >= 5001) (roi_value = 1), (rank = "CROWN");
 
             // Check if this is the user's first staking
             let existingStakes = await Staking.find({ user_id: user_id });
             let isFirstStaking = existingStakes.length === 0;
-            let staking_value = user?.self_staking + Number(amount);
+            let staking_value = (user?.self_staking || 0) + Number(amount);
 
             // Find direct referrals
             let direct = await Referral.find({ sponser_id: user._id });
-            console.log(direct, "Log of direct");
 
             // Create a staking transaction
             let obj = {
@@ -790,103 +792,135 @@ module.exports = {
                 id: user._id,
                 amount: amount,
                 roi: roi_value,
-                currency: 'USDT',
+                currency: "USDT",
                 total: direct?.length > 0 ? amount * 3 : amount * 2,
-                chain: 'BEP20',
+                chain: "BEP20",
                 type: "ADMIN_STAKING"
             };
             let stake = await Staking.create(obj);
 
             // Update user's self-staking status and rank if new rank is higher
             let updateFields = {
-                staking_status: 'ACTIVE',
-                self_staking: staking_value
+                staking_status: "ACTIVE",
+                total_earning_potential: direct?.length > 0 ? 300 : 200,
+                self_staking: staking_value,
             };
             // Only update rank if new rank is higher
             const currentRank = user.current_rank;
             if (!currentRank || rankOrder.indexOf(rank) > rankOrder.indexOf(currentRank)) {
                 updateFields.current_rank = rank;
             }
-            updateFields.total_earning_potential = direct?.length > 0 ? 300 : 200;
             if (isFirstStaking) {
                 updateFields.activation_date = new Date();
             }
-            await Users.updateOne(
-                { user_id: user_id },
-                { $set: updateFields }
-            );
+            await Users.updateOne({ user_id: user_id }, { $set: updateFields });
 
             // Update all previous stakes' total if direct referrals exist
             if (direct.length) {
                 let allStakes = await Staking.find({ user_id });
                 for (let stakeItem of allStakes) {
-                    if (stakeItem.total != (3 * stakeItem.amount)) {
+                    if (stakeItem.total != 3 * stakeItem.amount) {
                         let updatedTotal = 3 * stakeItem.amount;
-                        await Staking.findByIdAndUpdate(stakeItem?._id, { total: updatedTotal }, { new: true });
+                        await Staking.findByIdAndUpdate(
+                            stakeItem?._id,
+                            { total: updatedTotal },
+                            { new: true }
+                        );
                     }
                 }
             }
-            console.log("All Existing stakes updated accordingly...");
 
-            // DIRECT REFERRAL BONUS (10% to sponsor)
+            // DIRECT REFERRAL BONUS (admin version logic + INACTIVE/COMPLETE update)
             let sponser = await Referral.findOne({ user_id: user._id });
             let sponser_user = await User.findById(user._id);
             let sponser_user_staking = await Staking.findOne({ id: sponser?.sponser_id }).sort({ createdAt: -1 });
-            let sponse_user_total = sponser_user_staking?.total;
-            let sponser_user_paid = sponser_user_staking?.paid;
+            let sponse_user_total = sponser_user_staking?.total || 0;
+            let sponser_user_paid = sponser_user_staking?.paid || 0;
 
             if (sponser != null && sponser.sponser_id != null) {
-                let direct_bonus = amount * 10 / 100;
-                let updatedPaid = (sponser_user_paid || 0) + direct_bonus;
+                let direct_bonus = (amount * 10) / 100;
+                let remaining = sponse_user_total - sponser_user_paid;
 
-                // Transfer bonus to sponsor's wallet
-                await Wallet.updateOne(
-                    { user_id: sponser.sponser_code },
-                    { $inc: { usdt_balance: direct_bonus } }
-                );
+                if (remaining <= 0) {
+                    // Sponsor has reached or exceeded earning potential, no bonus
+                    // Update sponsor's latest staking status to COMPLETE
+                    if (sponser_user_staking?._id) {
+                        await Staking.findByIdAndUpdate(
+                            sponser_user_staking._id,
+                            { staking_status: "COMPLETE" },
+                            { new: true }
+                        );
+                        // Also update the sponsor user's staking_status to INACTIVE
+                        await Users.updateOne(
+                            { user_id: sponser.sponser_code },
+                            { $set: { staking_status: "INACTIVE" } }
+                        );
+                    }
+                } else {
+                    // Only pay up to the remaining earning potential
+                    let bonus_to_pay = Math.min(direct_bonus, remaining);
+                    let updatedPaid = sponser_user_paid + bonus_to_pay;
 
-                // Update paid value in sponsor user latest staking transaction
-                if (sponse_user_total > sponser_user_paid) {
+                    // Transfer bonus to sponsor's wallet
+                    await Wallet.updateOne(
+                        { user_id: sponser.sponser_code },
+                        { $inc: { usdt_balance: bonus_to_pay } }
+                    );
+
+                    // Update paid value in sponsor user latest staking transaction
                     await Staking.findByIdAndUpdate(
                         sponser_user_staking?._id,
-                        { direct_bonus_paid: updatedPaid ,paid:updatedPaid},
+                        { direct_bonus_paid: updatedPaid, paid: updatedPaid },
                         { new: true }
                     );
-                }
 
-                // Create transaction for direct bonus for sponsor
-                let bonusObj = {
-                    user_id: sponser.sponser_code,
-                    id: sponser.sponser_id,
-                    amount: direct_bonus,
-                    staking_id: stake._id,
-                    currency: 'USDT',
-                    transaction_type: 'DIRECT REFERRAL BONUS',
-                    status: "COMPLETED",
-                    from: user_id,
-                    from_user_name: user.name,
-                    income_type: 'sng_direct_referral',
-                    package_amount: amount
-                };
-                await Transaction.create(bonusObj);
+                    // After updating, check if staking is now complete
+                    if (updatedPaid >= sponse_user_total) {
+                        await Staking.findByIdAndUpdate(
+                            sponser_user_staking._id,
+                            { staking_status: "COMPLETE" },
+                            { new: true }
+                        );
+                        await Users.updateOne(
+                            { user_id: sponser.sponser_code },
+                            { $set: { staking_status: "INACTIVE" } }
+                        );
+                    }
+
+                    // Create transaction for direct bonus for sponsor
+                    let bonusObj = {
+                        user_id: sponser.sponser_code,
+                        id: sponser.sponser_id,
+                        amount: bonus_to_pay,
+                        staking_id: stake._id,
+                        currency: "USDT",
+                        transaction_type: "DIRECT REFERRAL BONUS",
+                        status: "COMPLETED",
+                        from: user_id,
+                        from_user_name: user.name,
+                        income_type: "sng_direct_referral",
+                        package_amount: amount,
+                    };
+                    await Transaction.create(bonusObj);
+                }
             }
 
             // Return success response
             return res.status(200).json({
                 success: true,
-                message: 'Amount Staked!!',
-                data: stake
+                message: "Amount Staked!!",
+                data: stake,
             });
         } catch (error) {
             console.log(error, " : ERROR while buying package");
             return res.status(500).json({
                 success: false,
                 message: error.message,
-                data: []
+                data: [],
             });
         }
     },
-    
+
 
     deductUserStacking: async (req, res) => {
         try {
