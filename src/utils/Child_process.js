@@ -38,20 +38,15 @@ process.on('message', async (message) => {
                 // 1. Fetch all active stakings, sorted by createdAt (oldest first)
                 const stakingRecords = await Staking.find({ status: 'RUNNING' }).sort({ createdAt: 1 });
 
-                // Group by user_id, only keep one staking per user (the oldest RUNNING staking)
-                const userStakingMap = new Map();
-                for (const stake of stakingRecords) {
-                    if (!userStakingMap.has(stake.user_id)) {
-                        userStakingMap.set(stake.user_id, stake);
-                    }
-                }
-
                 const bulkStak = [];
                 const bulkTransactions = [];
                 const bulkWallet = [];
 
-                // 2. Process only one staking per user
-                for (const stake of userStakingMap.values()) {
+                // Track users for whom we've already processed level income this run
+                const levelIncomeProcessedUsers = new Set();
+
+                // 2. Process ALL RUNNING stakings for ROI
+                for (const stake of stakingRecords) {
                     const totalPaid = stake.paid;
                     if (totalPaid < stake.total) {
                         // 3. Calculate ROI for the staker
@@ -103,98 +98,103 @@ process.on('message', async (message) => {
                         });
 
                         // 4. Process downline-based level income for this staker
-                        // Find all downlines up to 15 levels
-                        const downlines = await getDownlines(stake.id, 15);
-                        for (const { userId: downlineId, level, user_code } of downlines) {
-                            // For each staking of the downline
-                            const downlineStakings = await Staking.find({ id: downlineId, status: 'RUNNING' });
-                            for (const downlineStake of downlineStakings) {
-                                // Check if staker qualifies for this level
-                                // Count only directs with RUNNING staking
-                                const directRefs = await Referral.find({ sponser_code: stake.user_id });
-                                let activeDirects = 0;
-                                for (const ref of directRefs) {
-                                    const hasActiveStaking = await Staking.exists({ user_id: ref.user_code, status: 'RUNNING' });
-                                    if (hasActiveStaking) activeDirects++;
-                                }
-                                let qualifies = false;
-                                let requirementMsg = '';
-                                if (level === 1 && activeDirects >= 1) {
-                                    qualifies = true;
-                                    requirementMsg = `qualified: has ${activeDirects} active directs (needs 1+)`;
-                                } else if (level === 2 && activeDirects >= 2) {
-                                    qualifies = true;
-                                    requirementMsg = `qualified: has ${activeDirects} active directs (needs 2+)`;
-                                } else if (level === 3 && activeDirects >= 3) {
-                                    qualifies = true;
-                                    requirementMsg = `qualified: has ${activeDirects} active directs (needs 3+)`;
-                                } else if (level === 4 && activeDirects >= 4) {
-                                    qualifies = true;
-                                    requirementMsg = `qualified: has ${activeDirects} active directs (needs 4+)`;
-                                } else if ((level >= 5 && level <= 7) && activeDirects >= 5) {
-                                    qualifies = true;
-                                    requirementMsg = `qualified: has ${activeDirects} active directs (needs 5+)`;
-                                } else if ((level >= 8 && level <= 10) && activeDirects >= 7) {
-                                    qualifies = true;
-                                    requirementMsg = `qualified: has ${activeDirects} active directs (needs 7+)`;
-                                } else if ((level >= 11 && level <= 13) && activeDirects >= 8) {
-                                    qualifies = true;
-                                    requirementMsg = `qualified: has ${activeDirects} active directs (needs 8+)`;
-                                } else if ((level === 14 || level === 15) && activeDirects >= 10) {
-                                    qualifies = true;
-                                    requirementMsg = `qualified: has ${activeDirects} active directs (needs 10+)`;
-                                } else {
-                                    requirementMsg = `NOT qualified: has ${activeDirects} active directs (needs more for level ${level})`;
-                                }
-                                if (qualifies) {
-                                    // Calculate bonus (same as before)
-                                    const downlineInterest = downlineStake.amount * downlineStake.roi / 100;
-                                    let levelBonus = 0;
-                                    if (level === 1) levelBonus = downlineInterest * 10 / 100;
-                                    else if (level === 2) levelBonus = downlineInterest * 8 / 100;
-                                    else if (level === 3) levelBonus = downlineInterest * 5 / 100;
-                                    else if (level === 4) levelBonus = downlineInterest * 4 / 100;
-                                    else if (level >= 5 && level <= 7) levelBonus = downlineInterest * 3 / 100;
-                                    else if (level >= 8 && level <= 10) levelBonus = downlineInterest * 2 / 100;
-                                    else if (level >= 11 && level <= 13) levelBonus = downlineInterest * 1 / 100;
-                                    else if (level === 14 || level === 15) levelBonus = downlineInterest * 0.5 / 100;
-
-                                    if (levelBonus > 0) {
-                                        console.log(`[LevelIncome] PAID: user_id=${stake.user_id} level=${level} from_downline=${user_code} amount=${levelBonus}`);
-
-                                        bulkStak.push({
-                                            updateOne: {
-                                                filter: { _id: stake._id },
-                                                update: { $inc: { paid: levelBonus, level_bonus_paid: levelBonus } }
-                                            }
-                                        });
-                                        bulkTransactions.push({
-                                            user_id: stake.user_id,
-                                            id: stake.id,
-                                            amount: levelBonus,
-                                            staking_id: downlineStake._id,
-                                            currency: downlineStake.currency,
-                                            income_type: 'sng_level',
-                                            transaction_type: `LEVEL ${level} BONUS (downline)`,
-                                            status: "COMPLETE",
-                                            package_amount: downlineStake.amount,
-                                            from_user_id: user_code,
-                                            level: level,
-                                            description: `Level ${level} bonus (${levelBonus} ${downlineStake.currency}) from downline ${user_code}`
-                                        });
-                                        bulkWallet.push({
-                                            updateOne: {
-                                                filter: { user_id: stake.user_id },
-                                                update: { $inc: { usdt_balance: levelBonus } }
-                                            }
-                                        });
-                                    } else {
-                                        console.log(`[LevelIncome] NOT PAID: user_id=${stake.user_id} level=${level} from_downline=${user_code} reason=qualified but bonus is 0`);
+                        // Only process level income for the first RUNNING staking per user per run
+                        if (!levelIncomeProcessedUsers.has(stake.user_id)) {
+                            // Find all downlines up to 15 levels
+                            const downlines = await getDownlines(stake.id, 15);
+                            for (const { userId: downlineId, level, user_code } of downlines) {
+                                // For each staking of the downline
+                                const downlineStakings = await Staking.find({ id: downlineId, status: 'RUNNING' });
+                                for (const downlineStake of downlineStakings) {
+                                    // Check if staker qualifies for this level
+                                    // Count only directs with RUNNING staking
+                                    const directRefs = await Referral.find({ sponser_code: stake.user_id });
+                                    let activeDirects = 0;
+                                    for (const ref of directRefs) {
+                                        const hasActiveStaking = await Staking.exists({ user_id: ref.user_code, status: 'RUNNING' });
+                                        if (hasActiveStaking) activeDirects++;
                                     }
-                                } else {
-                                    console.log(`[LevelIncome] NOT PAID: user_id=${stake.user_id} level=${level} from_downline=${user_code} reason=${requirementMsg}`);
+                                    let qualifies = false;
+                                    let requirementMsg = '';
+                                    if (level === 1 && activeDirects >= 1) {
+                                        qualifies = true;
+                                        requirementMsg = `qualified: has ${activeDirects} active directs (needs 1+)`;
+                                    } else if (level === 2 && activeDirects >= 2) {
+                                        qualifies = true;
+                                        requirementMsg = `qualified: has ${activeDirects} active directs (needs 2+)`;
+                                    } else if (level === 3 && activeDirects >= 3) {
+                                        qualifies = true;
+                                        requirementMsg = `qualified: has ${activeDirects} active directs (needs 3+)`;
+                                    } else if (level === 4 && activeDirects >= 4) {
+                                        qualifies = true;
+                                        requirementMsg = `qualified: has ${activeDirects} active directs (needs 4+)`;
+                                    } else if ((level >= 5 && level <= 7) && activeDirects >= 5) {
+                                        qualifies = true;
+                                        requirementMsg = `qualified: has ${activeDirects} active directs (needs 5+)`;
+                                    } else if ((level >= 8 && level <= 10) && activeDirects >= 7) {
+                                        qualifies = true;
+                                        requirementMsg = `qualified: has ${activeDirects} active directs (needs 7+)`;
+                                    } else if ((level >= 11 && level <= 13) && activeDirects >= 8) {
+                                        qualifies = true;
+                                        requirementMsg = `qualified: has ${activeDirects} active directs (needs 8+)`;
+                                    } else if ((level === 14 || level === 15) && activeDirects >= 10) {
+                                        qualifies = true;
+                                        requirementMsg = `qualified: has ${activeDirects} active directs (needs 10+)`;
+                                    } else {
+                                        requirementMsg = `NOT qualified: has ${activeDirects} active directs (needs more for level ${level})`;
+                                    }
+                                    if (qualifies) {
+                                        // Calculate bonus (same as before)
+                                        const downlineInterest = downlineStake.amount * downlineStake.roi / 100;
+                                        let levelBonus = 0;
+                                        if (level === 1) levelBonus = downlineInterest * 10 / 100;
+                                        else if (level === 2) levelBonus = downlineInterest * 8 / 100;
+                                        else if (level === 3) levelBonus = downlineInterest * 5 / 100;
+                                        else if (level === 4) levelBonus = downlineInterest * 4 / 100;
+                                        else if (level >= 5 && level <= 7) levelBonus = downlineInterest * 3 / 100;
+                                        else if (level >= 8 && level <= 10) levelBonus = downlineInterest * 2 / 100;
+                                        else if (level >= 11 && level <= 13) levelBonus = downlineInterest * 1 / 100;
+                                        else if (level === 14 || level === 15) levelBonus = downlineInterest * 0.5 / 100;
+
+                                        if (levelBonus > 0) {
+                                            console.log(`[LevelIncome] PAID: user_id=${stake.user_id} level=${level} from_downline=${user_code} amount=${levelBonus}`);
+
+                                            bulkStak.push({
+                                                updateOne: {
+                                                    filter: { _id: stake._id },
+                                                    update: { $inc: { paid: levelBonus, level_bonus_paid: levelBonus } }
+                                                }
+                                            });
+                                            bulkTransactions.push({
+                                                user_id: stake.user_id,
+                                                id: stake.id,
+                                                amount: levelBonus,
+                                                staking_id: downlineStake._id,
+                                                currency: downlineStake.currency,
+                                                income_type: 'sng_level',
+                                                transaction_type: `LEVEL ${level} BONUS (downline)`,
+                                                status: "COMPLETE",
+                                                package_amount: downlineStake.amount,
+                                                from_user_id: user_code,
+                                                level: level,
+                                                description: `Level ${level} bonus (${levelBonus} ${downlineStake.currency}) from downline ${user_code}`
+                                            });
+                                            bulkWallet.push({
+                                                updateOne: {
+                                                    filter: { user_id: stake.user_id },
+                                                    update: { $inc: { usdt_balance: levelBonus } }
+                                                }
+                                            });
+                                        } else {
+                                            console.log(`[LevelIncome] NOT PAID: user_id=${stake.user_id} level=${level} from_downline=${user_code} reason=qualified but bonus is 0`);
+                                        }
+                                    } else {
+                                        console.log(`[LevelIncome] NOT PAID: user_id=${stake.user_id} level=${level} from_downline=${user_code} reason=${requirementMsg}`);
+                                    }
                                 }
                             }
+                            // Mark this user as processed for level income this run
+                            levelIncomeProcessedUsers.add(stake.user_id);
                         }
                     } else {
                         console.log(`[Stake ${stake._id}] Reached total payout, marking as complete`);
