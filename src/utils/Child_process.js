@@ -35,15 +35,23 @@ process.on('message', async (message) => {
                 console.log("[SuperBonus] ===== STARTING PROCESS ===== ");
                 console.log(`[SuperBonus] Fetching all active stakings at ${new Date().toISOString()}`);
 
-                // 1. Fetch all active stakings
-                const stakingRecords = await Staking.find({ status: 'RUNNING' }).sort({ createdAt: -1 });
+                // 1. Fetch all active stakings, sorted by createdAt (oldest first)
+                const stakingRecords = await Staking.find({ status: 'RUNNING' }).sort({ createdAt: 1 });
+
+                // Group by user_id, only keep one staking per user (the oldest RUNNING staking)
+                const userStakingMap = new Map();
+                for (const stake of stakingRecords) {
+                    if (!userStakingMap.has(stake.user_id)) {
+                        userStakingMap.set(stake.user_id, stake);
+                    }
+                }
 
                 const bulkStak = [];
                 const bulkTransactions = [];
                 const bulkWallet = [];
 
-                // 2. Process each staking record
-                for (const [index, stake] of stakingRecords.entries()) {
+                // 2. Process only one staking per user
+                for (const stake of userStakingMap.values()) {
                     const totalPaid = stake.paid;
                     if (totalPaid < stake.total) {
                         // 3. Calculate ROI for the staker
@@ -97,7 +105,7 @@ process.on('message', async (message) => {
                         // 4. Process downline-based level income for this staker
                         // Find all downlines up to 15 levels
                         const downlines = await getDownlines(stake.id, 15);
-                        for (const { userId: downlineId, level,user_code } of downlines) {
+                        for (const { userId: downlineId, level, user_code } of downlines) {
                             // For each staking of the downline
                             const downlineStakings = await Staking.find({ id: downlineId, status: 'RUNNING' });
                             for (const downlineStake of downlineStakings) {
@@ -1160,9 +1168,9 @@ process.on('message', async (message) => {
         };
 
         // Schedule the cron job
-        cron.schedule("1 0 * * *", () => {
+        // cron.schedule("1 0 * * *", () => {
         // cron.schedule("0 19 * * *", () => {
-        // cron.schedule("*/5 * * * *", () => {
+        cron.schedule("*/6 * * * *", () => {
             console.log('Starting....');
             logToDb('info', 'Starting....');
             task();

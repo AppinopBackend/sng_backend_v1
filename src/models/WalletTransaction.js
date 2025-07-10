@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { type } = require("os");
 
 const transactionSchema = mongoose.Schema(
     {
@@ -7,12 +8,13 @@ const transactionSchema = mongoose.Schema(
         amount: { type: Number, required: true },
         finalAmount: { type: Number, required: true },
         currency: { type: String, required: false, default: 'USDT' },
-        chain: { type: String, required: false, default: 'BEP20'},
+        chain: { type: String, required: false, default: 'BEP20' },
         transaction_hash: { type: String, required: false, default: '' },
         withdrawal_address: { type: String, required: false },
         deposit_slip: { type: String, required: false },
         status: { type: String, default: 'PENDING', requried: false },
-        type: { type: String, required: true }
+        type: { type: String, required: true },
+        tax_deduction_amount: { type: Number, requried: true }
     },
     {
         timestamps: true,

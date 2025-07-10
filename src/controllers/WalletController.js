@@ -188,6 +188,7 @@ module.exports = {
       chain: chain,
       withdrawal_address: withdrawal_address,
       type: "WITHDRAWAL",
+      tax_deduction_amount : deduction
     };
 
     await WalletTransaction.create(obj);
