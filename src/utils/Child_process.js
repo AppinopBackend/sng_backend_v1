@@ -1168,9 +1168,9 @@ process.on('message', async (message) => {
         };
 
         // Schedule the cron job
-        // cron.schedule("1 0 * * *", () => {
+        cron.schedule("1 0 * * *", () => {
         // cron.schedule("0 19 * * *", () => {
-        cron.schedule("*/6 * * * *", () => {
+        // cron.schedule("*/6 * * * *", () => {
             console.log('Starting....');
             logToDb('info', 'Starting....');
             task();
