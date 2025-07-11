@@ -148,7 +148,7 @@ module.exports = {
         { user_id: user_id },
         {
           $inc: {
-            usdt_balance: -finalAmount,
+            usdt_balance: -amount,
           },
         }
       );
@@ -168,7 +168,7 @@ module.exports = {
         { user_id: user_id },
         {
           $inc: {
-            sng_balance: -finalAmount,
+            sng_balance: -amount,
           },
         }
       );
