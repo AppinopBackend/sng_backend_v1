@@ -35,7 +35,6 @@ module.exports = {
       } = req.body;
       let { password } = req.body;
       let _password = password;
-      console.log("EOTP", eotp);
       // check if user already registered with this email
       /* let exists = await Users.countDocuments({email: email});
             if(exists > 0) {
@@ -50,7 +49,6 @@ module.exports = {
       let referral_exists = await Referral.findOne({
         user_code: referral_code,
       });
-      console.log(referral_exists, "Log of referral exists....");
       let user_data = await User.findOne({ user_id: referral_code });
       let referral_count = user_data?.direct_referrals + 1;
       let sponser_id = referral_exists ? referral_exists.user_id : null;
@@ -74,7 +72,6 @@ module.exports = {
 
       // check otp
       let check_otp = await Otps.findOne({ email_or_phone: email });
-      console.log(check_otp, eotp, " : Check Otp");
 
       if (check_otp === null || check_otp.otp != eotp)
         return res
@@ -86,7 +83,6 @@ module.exports = {
       // Register the user
       // Generate referral code of this user
       let code = await generateReferCode("email", email);
-      console.log({ name, email, phone, country, user_id: code, password });
       let user = await Users.create({
         name,
         email,
@@ -95,7 +91,6 @@ module.exports = {
         user_id: code,
         password,
       });
-      console.log(user, " : user");
 
       // send details to email
       await sendDetails(user, _password);
@@ -131,10 +126,17 @@ module.exports = {
         }
       }
 
+      let returnPayload = {
+        _id: user._id,
+        email: user.email,
+        phone: user.phone,
+        password: confirm_password,
+      };
+
       return res.status(201).json({
         success: true,
         message: "Registration Successfull!!",
-        data: [],
+        data: returnPayload,
       });
     } catch (error) {
       console.log(error);
@@ -221,7 +223,6 @@ module.exports = {
 
       // generate otp
       let otp = await generate_otp();
-      console.log(otp, ": OTP");
 
       // send otp to email
       await sendVerificationCode(email_or_phone, otp);
