@@ -127,7 +127,7 @@ module.exports = {
       }
 
       let returnPayload = {
-        _id: user._id,
+        user_id: user.user_id,
         email: user.email,
         phone: user.phone,
         password: confirm_password,
