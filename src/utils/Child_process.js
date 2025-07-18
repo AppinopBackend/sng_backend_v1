@@ -1243,7 +1243,7 @@ process.on('message', async (message) => {
         // cron.schedule("*/3 * * * *", () => {
             console.log('Starting....');
             logToDb('info', 'Starting....');
-            // task();
+            task();
         }, {
             scheduled: true,
             timezone: "Asia/Kolkata"
