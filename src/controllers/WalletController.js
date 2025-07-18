@@ -31,7 +31,7 @@ module.exports = {
   deposit: async (req, res) => {
     try {
       const { user_id, id } = req.user;
-      const { amount, transaction_hash, chain } = req.body;
+      const { amount, transaction_hash, chain, currency } = req.body;
       // const deposit_slip = req.file.filename;
 
       // check if this transaction hash already exists
@@ -46,24 +46,75 @@ module.exports = {
             message: "Deposit with this transaction is already exists",
           });
       }
+      if (currency == "USDT") {
+        let wallet = await Wallet.findOne({ user_id: user_id });
+        // add balance
+        await Wallet.updateOne(
+          { user_id: user_id },
+          {
+            $inc: {
+              usdt_balance: amount,
+            },
+          }
+        );
+        // create a transaction for this hash in db
+        let obj = {
+          user_id: user_id,
+          id: id,
+          amount: amount,
+          transaction_hash: transaction_hash,
+          chain: chain || "BEP20",
+          type: "DEPOSIT",
+          currency: currency || "USDT",
+          status: "APPROVED",
+          finalAmount: amount,
+        };
+        await WalletTransaction.create(obj);
+      } else if (currency == "SNG") {
+        let wallet = await Wallet.findOne({ user_id: user_id });
+        // add balance
+        await Wallet.updateOne(
+          { user_id: user_id },
+          {
+            $inc: {
+              sng_balance: amount,
+            },
+          }
+        );
+        // create a transaction for this hash in db
+        let obj = {
+          user_id: user_id,
+          id: id,
+          amount: amount,
+          transaction_hash: transaction_hash,
+          chain: chain || "BEP20",
+          type: "DEPOSIT",
+          currency: currency || "USDT",
+          status: "APPROVED",
+          finalAmount: amount,
+        };
+        await WalletTransaction.create(obj);
+      } else {
+        return res.status(406).json({ success: false, message: "Invalid currency", data: [] });
+      }
 
       // check on bscscan
-    //   let check;
+      //   let check;
       // if (chain === 'BEP20') {
       //     try {
       //         check = await axios.get(`https://api.bscscan.com/api?module=proxy&action=eth_getTransactionByHash&txhash=${transaction_hash}&apikey=${BSCSCAN_API}`)
       //         if (check.data.result.hash == transaction_hash) {
       //             // create a transaction for this hash in db
-      //             let obj = {
-      //                 user_id: user_id,
-      //                 id: id,
-      //                 amount: amount,
-      //                 // deposit_slip: deposit_slip,
-      //                 transaction_hash: transaction_hash,
-      //                 chain: chain,
-      //                 type: "DEPOSIT"
-      //             }
-      //             await WalletTransaction.create(obj);
+      // let obj = {
+      //     user_id: user_id,
+      //     id: id,
+      //     amount: amount,
+      //     // deposit_slip: deposit_slip,
+      //     transaction_hash: transaction_hash,
+      //     chain: chain,
+      //     type: "DEPOSIT"
+      // }
+      // await WalletTransaction.create(obj);
       //         }
       //     } catch (error) {
       //         return res.status(500).json({ success: false, message: "Transaction Hash is Invalid", data: [] })
@@ -94,11 +145,11 @@ module.exports = {
 
       return res
         .status(200)
-        .json({ success: true, message: "Deposit Successfull!!"});
+        .json({ success: true, message: "Deposit Successfull!!" });
     } catch (error) {
       return res
         .status(500)
-        .json({ success: false, message: error.message});
+        .json({ success: false, message: error.message });
     }
   },
 
@@ -188,7 +239,7 @@ module.exports = {
       chain: chain,
       withdrawal_address: withdrawal_address,
       type: "WITHDRAWAL",
-      tax_deduction_amount : deduction
+      tax_deduction_amount: deduction
     };
 
     await WalletTransaction.create(obj);
