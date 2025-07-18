@@ -29,14 +29,33 @@ process.on('message', async (message) => {
         const { getDownlineTeam2 } = require('../controllers/ReferralController');
 
 
-        // This will calculate daily once at 12:01 am (IST) SNG ROI BONUS
         async function superBonus() {
+            const runId = `run_${Date.now()}`;
+            const startedAt = new Date();
+            let finishedAt = null;
+            let status = 'started';
+            let errorMsg = null;
+            const logs = [];
+            const summary = {
+                roiCredited: 0,
+                roiUsers: 0,
+                levelBonuses: 0,
+                levelBonusUsers: 0,
+                completedStakes: 0,
+                errors: []
+            };
+            function addLog(msg, meta = {}) {
+                const entry = { timestamp: new Date().toISOString(), msg, ...meta };
+                logs.push(entry);
+                console.log(msg, meta);
+            }
             try {
-                console.log("[SuperBonus] ===== STARTING PROCESS ===== ");
-                console.log(`[SuperBonus] Fetching all active stakings at ${new Date().toISOString()}`);
+                addLog(`[SuperBonus][${runId}] ===== STARTING PROCESS =====`);
+                addLog(`[SuperBonus][${runId}] Fetching all active stakings at ${startedAt.toISOString()}`);
 
                 // 1. Fetch all active stakings, sorted by createdAt (oldest first)
                 const stakingRecords = await Staking.find({ status: 'RUNNING' }).sort({ createdAt: 1 });
+                addLog(`[SuperBonus][${runId}] Total RUNNING stakings found: ${stakingRecords.length}`);
 
                 const bulkStak = [];
                 const bulkTransactions = [];
@@ -51,6 +70,7 @@ process.on('message', async (message) => {
                     if (totalPaid < stake.total) {
                         // 3. Calculate ROI for the staker
                         const interest = stake.amount * stake.roi / 100;
+                        addLog(`[SuperBonus][ROI][${runId}] Processing staking: _id=${stake._id}, user_id=${stake.user_id}, amount=${stake.amount}, roi=${stake.roi}, interest=${interest}`);
 
                         // Add ROI to staker
                         bulkStak.push({
@@ -96,15 +116,21 @@ process.on('message', async (message) => {
                                 description: `Daily ROI income of ${interest} ${stake.currency} credited for staking amount ${stake.amount} at ROI ${stake.roi}%`
                             }
                         });
+                        addLog(`[SuperBonus][ROI][${runId}] Credited ROI income to user_id=${stake.user_id}, amount=${interest} ${stake.currency}`);
+                        summary.roiCredited += interest;
+                        summary.roiUsers += 1;
 
                         // 4. Process downline-based level income for this staker
                         // Only process level income for the first RUNNING staking per user per run
                         if (!levelIncomeProcessedUsers.has(stake.user_id)) {
+                            addLog(`[SuperBonus][LevelIncome][${runId}] Processing level income for user_id=${stake.user_id}, stake_id=${stake._id}`);
                             // Find all downlines up to 15 levels
                             const downlines = await getDownlines(stake.id, 15);
+                            addLog(`[SuperBonus][LevelIncome][${runId}] Found ${downlines.length} downlines for user_id=${stake.user_id}`);
                             for (const { userId: downlineId, level, user_code } of downlines) {
                                 // For each staking of the downline
                                 const downlineStakings = await Staking.find({ id: downlineId, status: 'RUNNING' });
+                                addLog(`[SuperBonus][LevelIncome][${runId}] Downline user_id=${downlineId}, level=${level}, active stakings=${downlineStakings.length}`);
                                 for (const downlineStake of downlineStakings) {
                                     // Check if staker qualifies for this level
                                     // Count only directs with RUNNING staking
@@ -157,7 +183,7 @@ process.on('message', async (message) => {
                                         else if (level === 14 || level === 15) levelBonus = downlineInterest * 0.5 / 100;
 
                                         if (levelBonus > 0) {
-                                            console.log(`[LevelIncome] PAID: user_id=${stake.user_id} level=${level} from_downline=${user_code} amount=${levelBonus}`);
+                                            addLog(`[SuperBonus][LevelIncome][PAID][${runId}] user_id=${stake.user_id} level=${level} from_downline=${user_code} amount=${levelBonus} (${requirementMsg})`);
 
                                             bulkStak.push({
                                                 updateOne: {
@@ -185,11 +211,13 @@ process.on('message', async (message) => {
                                                     update: { $inc: { usdt_balance: levelBonus } }
                                                 }
                                             });
+                                            summary.levelBonuses += levelBonus;
+                                            summary.levelBonusUsers += 1;
                                         } else {
-                                            console.log(`[LevelIncome] NOT PAID: user_id=${stake.user_id} level=${level} from_downline=${user_code} reason=qualified but bonus is 0`);
+                                            addLog(`[SuperBonus][LevelIncome][NOT PAID][${runId}] user_id=${stake.user_id} level=${level} from_downline=${user_code} reason=qualified but bonus is 0 (${requirementMsg})`);
                                         }
                                     } else {
-                                        console.log(`[LevelIncome] NOT PAID: user_id=${stake.user_id} level=${level} from_downline=${user_code} reason=${requirementMsg}`);
+                                        addLog(`[SuperBonus][LevelIncome][NOT PAID][${runId}] user_id=${stake.user_id} level=${level} from_downline=${user_code} reason=${requirementMsg}`);
                                     }
                                 }
                             }
@@ -197,7 +225,7 @@ process.on('message', async (message) => {
                             levelIncomeProcessedUsers.add(stake.user_id);
                         }
                     } else {
-                        console.log(`[Stake ${stake._id}] Reached total payout, marking as complete`);
+                        addLog(`[SuperBonus][StakeComplete][${runId}] Stake _id=${stake._id} for user_id=${stake.user_id} reached total payout, marking as COMPLETE`);
                         bulkStak.push({
                             updateOne: {
                                 filter: { _id: stake._id },
@@ -209,27 +237,69 @@ process.on('message', async (message) => {
                             { user_id: stake.user_id },
                             { $set: { staking_status: 'INACTIVE' } }
                         );
+                        addLog(`[SuperBonus][StakeComplete][${runId}] Updated user_id=${stake.user_id} staking_status to INACTIVE`);
+                        summary.completedStakes += 1;
                     }
                 }
 
                 // 5. Execute all bulk operations
-                console.log("\n[SuperBonus] Executing bulk operations...");
-                console.log(`- Staking updates: ${bulkStak.length} operations`);
-                console.log(`- Transactions: ${bulkTransactions.length} records`);
-                console.log(`- Wallet updates: ${bulkWallet.length} operations`);
+                addLog(`[SuperBonus][${runId}] Executing bulk operations...`);
+                addLog(`[SuperBonus][${runId}] - Staking updates: ${bulkStak.length} operations`);
+                addLog(`[SuperBonus][${runId}] - Transactions: ${bulkTransactions.length} records`);
+                addLog(`[SuperBonus][${runId}] - Wallet updates: ${bulkWallet.length} operations`);
 
-                if (bulkStak.length > 0) await Staking.bulkWrite(bulkStak);
-                if (bulkTransactions.length > 0) await Transaction.insertMany(bulkTransactions);
-                if (bulkWallet.length > 0) await Wallets.bulkWrite(bulkWallet);
+                if (bulkStak.length > 0) {
+                    await Staking.bulkWrite(bulkStak);
+                    addLog(`[SuperBonus][${runId}] Staking bulkWrite completed.`);
+                } else {
+                    addLog(`[SuperBonus][${runId}] No staking updates to process.`);
+                }
+                if (bulkTransactions.length > 0) {
+                    await Transaction.insertMany(bulkTransactions);
+                    addLog(`[SuperBonus][${runId}] Transaction insertMany completed.`);
+                } else {
+                    addLog(`[SuperBonus][${runId}] No transactions to insert.`);
+                }
+                if (bulkWallet.length > 0) {
+                    await Wallets.bulkWrite(bulkWallet);
+                    addLog(`[SuperBonus][${runId}] Wallets bulkWrite completed.`);
+                } else {
+                    addLog(`[SuperBonus][${runId}] No wallet updates to process.`);
+                }
 
-                console.log("\n[SuperBonus] ===== PROCESS COMPLETED SUCCESSFULLY =====");
-                console.log(`[SuperBonus] Finished at ${new Date().toISOString()}`);
+                finishedAt = new Date();
+                status = 'success';
+                addLog(`[SuperBonus][${runId}] ===== PROCESS COMPLETED SUCCESSFULLY =====`);
+                addLog(`[SuperBonus][${runId}] Finished at ${finishedAt.toISOString()}`);
+                // Store the run log in DB
+                await logToDb('info', 'superBonus run', {
+                    runId,
+                    startedAt,
+                    finishedAt,
+                    status,
+                    logs,
+                    summary
+                });
                 return true;
 
             } catch (error) {
-                console.error('\n[SuperBonus] !!!!! PROCESS FAILED !!!!!');
-                console.error('[SuperBonus] Error:', error);
-                console.error('[SuperBonus] Stack:', error.stack);
+                finishedAt = new Date();
+                status = 'error';
+                errorMsg = error.message;
+                summary.errors.push(errorMsg);
+                addLog(`[SuperBonus][${runId}] !!!!! PROCESS FAILED !!!!!`, { error: errorMsg });
+                addLog(`[SuperBonus][${runId}] Error:`, { error });
+                addLog(`[SuperBonus][${runId}] Stack:`, { stack: error.stack });
+                // Store the run log in DB
+                await logToDb('error', 'superBonus run', {
+                    runId,
+                    startedAt,
+                    finishedAt,
+                    status,
+                    errorMsg,
+                    logs,
+                    summary
+                });
                 throw error;
             }
         }
@@ -1170,7 +1240,7 @@ process.on('message', async (message) => {
         // Schedule the cron job
         cron.schedule("1 0 * * *", () => {
         // cron.schedule("0 19 * * *", () => {
-        // cron.schedule("*/6 * * * *", () => {
+        // cron.schedule("*/3 * * * *", () => {
             console.log('Starting....');
             logToDb('info', 'Starting....');
             task();
