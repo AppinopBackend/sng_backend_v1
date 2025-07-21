@@ -10,6 +10,7 @@ const User = require("../models/User");
 module.exports = {
     buyPackage: async (req, res) => {
         try {
+            let add;
             const rankOrder = ["SILVER", "GOLD", "PLATINUM", "DIAMOND", "CROWN"];
 
             const { user_id, id } = req.user;
@@ -39,7 +40,7 @@ module.exports = {
 
             // add balance from users wallet
             if(currency === "SNG"){
-                let add = await Wallet.updateOne(
+                 add = await Wallet.updateOne(
                     { user_id: user_id },
                     { $inc: { sng_balance: amount } }
                 );
@@ -53,7 +54,7 @@ module.exports = {
                         });
             }
             else if(currency === "USDT"){
-                let add = await Wallet.updateOne(
+                 add = await Wallet.updateOne(
                     { user_id: user_id },
                     { $inc: { usdt_balance: amount } }
                 );
