@@ -184,7 +184,7 @@ module.exports = {
     let deduction = amount * 0.1;
     let finalAmount = amount - deduction;
     if (currency == "USDT") {
-      if (wallet == null || wallet.usdt_balance < amount) {
+      if (wallet == null || wallet.total_balance < amount) {
         return res
           .status(406)
           .json({
@@ -199,12 +199,12 @@ module.exports = {
         { user_id: user_id },
         {
           $inc: {
-            usdt_balance: -amount,
+            total_balance: -amount,
           },
         }
       );
     } else if (currency == "SNG") {
-      if (wallet == null || wallet.sng_balance < amount) {
+      if (wallet == null || wallet.total_balance < amount) {
         return res
           .status(406)
           .json({
@@ -219,7 +219,7 @@ module.exports = {
         { user_id: user_id },
         {
           $inc: {
-            sng_balance: -amount,
+            total_balance: -amount,
           },
         }
       );

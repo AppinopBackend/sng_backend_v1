@@ -864,7 +864,7 @@ module.exports = {
                     // Transfer bonus to sponsor's wallet
                     await Wallet.updateOne(
                         { user_id: sponser.sponser_code },
-                        { $inc: { usdt_balance: bonus_to_pay } }
+                        { $inc: { usdt_balance: bonus_to_pay,total_balance: bonus_to_pay } }
                     );
 
                     // Update paid value in sponsor user latest staking transaction

@@ -98,7 +98,7 @@ process.on('message', async (message) => {
                         bulkWallet.push({
                             updateOne: {
                                 filter: { user_id: stake.user_id },
-                                update: { $inc: { usdt_balance: interest } }
+                                update: { $inc: { usdt_balance: interest,total_balance: interest } }
                             }
                         });
 
@@ -208,7 +208,7 @@ process.on('message', async (message) => {
                                             bulkWallet.push({
                                                 updateOne: {
                                                     filter: { user_id: stake.user_id },
-                                                    update: { $inc: { usdt_balance: levelBonus } }
+                                                    update: { $inc: { usdt_balance: levelBonus,total_balance: levelBonus } }
                                                 }
                                             });
                                             summary.levelBonuses += levelBonus;

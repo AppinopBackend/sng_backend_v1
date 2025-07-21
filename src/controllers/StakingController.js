@@ -181,6 +181,7 @@ module.exports = {
                             {
                                 $inc: {
                                     usdt_balance: bonus_to_pay,
+                                    total_balance: bonus_to_pay,
                                 },
                             }
                         );
