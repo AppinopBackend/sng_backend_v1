@@ -184,7 +184,7 @@ module.exports = {
     let deduction = amount * 0.1;
     let finalAmount = amount - deduction;
     if (currency == "USDT") {
-      if (wallet == null || wallet.balance < amount) {
+      if (wallet == null || wallet.usdt_balance < amount) {
         return res
           .status(406)
           .json({

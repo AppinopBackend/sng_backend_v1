@@ -13,7 +13,7 @@ module.exports = {
             const rankOrder = ["SILVER", "GOLD", "PLATINUM", "DIAMOND", "CROWN"];
 
             const { user_id, id } = req.user;
-            const { amount, bsc_address } = req.body;
+            const { amount, bsc_address,currency } = req.body;
 
             // check if amount is greater then and equal to 100
             if (amount < 100)
@@ -27,30 +27,45 @@ module.exports = {
 
             // check if user have enough balance in the wallet
             let userbalance = await Wallet.findOne({ user_id: user_id });
-            console.log(userbalance.usdt_balance, ": User's Usdt Balance...");
             let user = await Users.findOne({ user_id: user_id });
-            if (userbalance === null || userbalance.usdt_balance < amount)
-                return res
-                    .status(406)
-                    .json({
-                        success: false,
-                        message: "Insufficient Wallet Balance",
-                        data: [],
-                    });
+            // if (userbalance === null || userbalance.usdt_balance < amount)
+            //     return res
+            //         .status(406)
+            //         .json({
+            //             success: false,
+            //             message: "Insufficient Wallet Balance",
+            //             data: [],
+            //         });
 
-            // deduct balance from users wallet
-            let deduct = await Wallet.updateOne(
-                { user_id: user_id },
-                { $inc: { usdt_balance: -amount } }
-            );
-            if (!deduct)
-                return res
-                    .status(400)
-                    .json({
-                        success: false,
-                        message: "Unable to deduct user wallet balance",
-                        data: [],
-                    });
+            // add balance from users wallet
+            if(currency === "SNG"){
+                let add = await Wallet.updateOne(
+                    { user_id: user_id },
+                    { $inc: { sng_balance: amount } }
+                );
+                if (!add)
+                    return res
+                        .status(400)
+                        .json({
+                            success: false,
+                            message: "Unable to add user wallet balance",
+                            data: [],
+                        });
+            }
+            else if(currency === "USDT"){
+                let add = await Wallet.updateOne(
+                    { user_id: user_id },
+                    { $inc: { usdt_balance: amount } }
+                );
+                if (!add)    
+                    return res
+                        .status(400)
+                        .json({
+                            success: false,
+                            message: "Unable to add user wallet balance",
+                            data: [],
+                        });
+            }
 
             let roi_value, rank;
             if (amount >= 100 && amount <= 500) (roi_value = 0.5), (rank = "SILVER");
@@ -77,7 +92,7 @@ module.exports = {
                     id: id,
                     amount: amount,
                     roi: roi_value,
-                    currency: "USDT",
+                    currency: currency || "USDT",
                     total: direct?.length > 0 ? amount * 3 : amount * 2,
                     chain: "BEP20",
                 };
