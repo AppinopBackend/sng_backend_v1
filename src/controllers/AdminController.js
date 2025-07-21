@@ -475,7 +475,7 @@ module.exports = {
             const obj = {};
             obj.totalUsers = await Users.countDocuments();
             obj.totalDeposit = await WalletTransaction.countDocuments({type: "DEPOSIT"})
-            obj.totalWithdrawal = await WalletTransaction.countDocuments({type: "WITHDRAWAL"})
+            obj.totalWithdrawal = await WalletTransaction.countDocuments({type: "WITHDRAWAL", status: "COMPLETED"})
             
             // Total staking amount
             let business = await Staking.aggregate([
