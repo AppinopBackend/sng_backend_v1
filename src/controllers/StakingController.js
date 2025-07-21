@@ -77,7 +77,7 @@ module.exports = {
                 (roi_value = 0.8), (rank = "DIAMOND");
             else if (amount >= 5001) (roi_value = 1), (rank = "CROWN");
 
-            if (deduct.modifiedCount > 0) {
+            if (add.modifiedCount > 0) {
                 // Check if this is the user's first staking
                 let existingStakes = await Staking.find({ user_id: user_id });
                 let isFirstStaking = existingStakes.length === 0;
