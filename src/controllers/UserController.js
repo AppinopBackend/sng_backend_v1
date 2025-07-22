@@ -13,7 +13,11 @@ const {
   generate_otp,
   check_type,
 } = require("../utils/Utils");
-const { sendVerificationCode, sendDetails } = require("../utils/Marketing");
+const {
+  sendVerificationCode,
+  sendDetails,
+  sendSupportEmail,
+} = require("../utils/Marketing");
 const AdminTransfer = require("../models/AdminTransfer");
 const WalletTransaction = require("../models/WalletTransaction");
 const UserToUserTransfer = require("../models/UserToUserTransfer");
@@ -973,6 +977,55 @@ module.exports = {
       return res.status(500).json({
         success: false,
         message: error.message,
+        data: [],
+      });
+    }
+  },
+  sendSupportEmail: async (req, res) => {
+    try {
+      const { user_id } = req.user;
+      const { message, contact_number } = req.body;
+      // Validate message
+      if (!message) {
+        return res.status(400).json({
+          success: false,
+          message: "Message is required",
+          data: [],
+        });
+      }
+
+      // Fetch user
+      const user = await Users.findOne({ user_id });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+          data: [],
+        });
+      }
+
+      // Send the support email (you may include the filePath in the email body or as attachment logic)
+      await sendSupportEmail(user.email, {
+        username: user.name,
+        message,
+        contact_number,
+        file: req.file ? req.file.path : null, // Optional: pass if your mailHelper supports it
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "Support request sent successfully",
+        data: {
+          email: user.email,
+          file: req.file ? req.file.path : null,
+        },
+      });
+    } catch (error) {
+      console.error("Support Email Error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+        error: error.message,
         data: [],
       });
     }

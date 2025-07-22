@@ -58,4 +58,42 @@ module.exports = {
       throw error;
     }
   },
+  sendSupportEmail: async (userMail, data) => {
+    try {
+      console.log("Sending Support Email....");
+      const transporter = nodemailer.createTransport({
+        host: process.env.MAILER_HOST,
+        port: process.env.MAILER_PORT,
+        secure: false,
+        auth: {
+          user: process.env.MAILER_USER,
+          pass: process.env.MAILER_PASS,
+        },
+      });
+      await transporter.sendMail({
+        from: userMail,
+        to: "sparknetgloball@gmail.com",
+        replyTo: userMail,
+        subject: `Support Request from ${data.username}`,
+        html: `New support request from Contact Us form:
+
+          <strong>Name:</strong> ${data.username}
+
+          <strong>Email:</strong> ${userMail}
+
+          <strong>Message:</strong>
+          ${data.message}`,
+        attachments: [
+          {
+            filename: data.file ? data.file.originalname : "attachment",
+            path: data.file,
+          },
+        ],
+      });
+      return "Support email sent successfully!";
+    } catch (error) {
+      console.error("[sendSupportEmail] Error:", error);
+      throw error;
+    }
+  },
 };
