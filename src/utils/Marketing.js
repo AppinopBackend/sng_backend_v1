@@ -1,7 +1,7 @@
 const nodemailer = require("nodemailer");
 
 module.exports = {
-  sendVerificationCode: async (email, otp) => {
+    sendVerificationCode: async (email, otp) => {
     try {
       console.log("Sending Verification Code....");
 
@@ -17,7 +17,7 @@ module.exports = {
       });
 
       res = await transporter.sendMail({
-        from: "noreply@sparknetglobal.in",
+        from: "admin@sparknetglobal.org",
         to: email,
         subject: "OTP FOR CONFIRMATION",
         html: `Here is your One time verification code to process your task @Spark Net Global <STRONG>${otp}</STRONG>,  or request is not submitted by you please report us at support@carnivalcoin.io`,

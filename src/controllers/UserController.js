@@ -33,7 +33,7 @@ module.exports = {
         email,
         phone,
         country,
-        bsc_address,
+        // bsc_address,
         confirm_password,
         eotp,
         referral_code,
@@ -49,13 +49,13 @@ module.exports = {
       /* if(!referral_code) {
                 return res.status(500).json({success: false, message: 'Referral Code is required!!', data: []})
             } */
-      if (!bsc_address) {
-        return res.status(406).json({
-          success: false,
-          message: "BSC Address is required!!",
-          data: [],
-        });
-      }
+      // if (!bsc_address) {
+      //   return res.status(406).json({
+      //     success: false,
+      //     message: "BSC Address is required!!",
+      //     data: [],
+      //   });
+      // }
       // check if referral code is valid or not
       let referral_exists = await Referral.findOne({
         user_code: referral_code,
@@ -101,7 +101,7 @@ module.exports = {
         country,
         user_id: code,
         password,
-        bsc_address,
+        // bsc_address : req.body.bsc_address? req.body.bsc_address : "",
       });
 
       // send details to email
@@ -342,7 +342,7 @@ module.exports = {
   update_profile: async (req, res) => {
     try {
       const { user_id } = req.user;
-      const { bsc_address, name } = req.body;
+      const { bsc_address, name,email,phone } = req.body;
       let user = await Users.findOne({ user_id: user_id });
       const profilepicture =
         req.file != undefined
@@ -359,6 +359,8 @@ module.exports = {
             name: name,
             profilepicture: profilepicture,
             bsc_address: bsc_address,
+            email: email,
+            phone: phone,
             // trc20_address: trc20_address,
           },
         }
