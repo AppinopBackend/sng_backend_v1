@@ -15,6 +15,7 @@ module.exports = {
           pass: process.env.MAILER_PASS,
         },
       });
+      console.log("🚀 ~ transporter:", transporter)
 
       res = await transporter.sendMail({
         from: "admin@sparknetglobal.org",
@@ -22,6 +23,7 @@ module.exports = {
         subject: "OTP FOR CONFIRMATION",
         html: `Here is your One time verification code to process your task @Spark Net Global <STRONG>${otp}</STRONG>,  or request is not submitted by you please report us at support@carnivalcoin.io`,
       });
+      console.log("🚀 ~ res:", res)
       return "Verification Code Send Successfully!";
     } catch (error) {
       console.error("[sendVerificationCode] Error:", error);
