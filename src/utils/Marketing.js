@@ -21,10 +21,10 @@ module.exports = {
       console.log("🚀 ~ transporter:", transporter);
 
       res = await transporter.sendMail({
-        from: "admin@sparknetglobal.org",
+        from: process.env.MAILER_USER,
         to: email,
         subject: "OTP FOR CONFIRMATION",
-        html: `Here is your One time verification code to process your task @Spark Net Global <STRONG>${otp}</STRONG>,  or request is not submitted by you please report us at support@carnivalcoin.io`,
+        html: `Here is your One time verification code to process your task @Spark Net Global <STRONG>${otp}</STRONG>,  or request is not submitted by you please report us at admin@sparknetglobal.org`,
       });
       console.log("🚀 ~ res:", res);
       return "Verification Code Send Successfully!";
@@ -48,10 +48,10 @@ module.exports = {
         },
       });
       res = await transporter.sendMail({
-        from: "noreply@sparknetglobal.in",
+        from: process.env.MAILER_USER,
         to: data.email,
         subject: "User Details",
-        html: `Welcome to spartnetglobal.in Thank you for registering with us here is you login credentials to continue explore our platform :<BR>
+        html: `Welcome to spartnetglobal.org Thank you for registering with us here is you login credentials to continue explore our platform :<BR>
                 userid : ${data.user_id} <BR>
                 email : ${data.email} <BR>
                 password : ${password} <BR>
@@ -77,7 +77,7 @@ module.exports = {
       });
       await transporter.sendMail({
         from: userMail,
-        to: "sparknetgloball@gmail.com",
+        to: process.env.MAILER_USER,
         replyTo: userMail,
         subject: `Support Request from ${data.username}`,
         html: `New support request from Contact Us form:
